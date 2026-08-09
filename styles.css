@@ -361,7 +361,10 @@ button { cursor: pointer; border: none; background: none; }
 }
 
 .field { margin-bottom: 24px; }
-.field > label { display: block; font-size: 12px; color: var(--dim); font-weight: 600; margin-bottom: 8px; letter-spacing: .03em; }
+/* :not(.switch) 가 꼭 필요하다. 이 선택자(0,1,1)가 .switch(0,1,0)를 이겨서
+   토글 행이 display:block 으로 덮이면, 스위치가 인라인이 되어 크기가 무시되고
+   0x0 으로 사라진다. 글꼴까지 라벨용으로 바뀌어 글씨가 겹쳐 보인다. */
+.field > label:not(.switch) { display: block; font-size: 12px; color: var(--dim); font-weight: 600; margin-bottom: 8px; letter-spacing: .03em; }
 .field input[type=text],
 .field input[type=email] { width: 100%; background: var(--panel); border: none; border-radius: 12px; padding: 14px; font-size: 15px; }
 .field input[type=text]:focus,

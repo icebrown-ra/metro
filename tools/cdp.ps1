@@ -44,6 +44,7 @@ $args = @(
     '--allow-file-access-from-files',
     '--mute-audio',
     "--window-size=$WindowSize",
+    '--force-device-scale-factor=1',      # 없으면 윈도우 배율 때문에 뷰포트가 어긋난다
     "--remote-debugging-port=$Port",
     "--user-data-dir=$profileDir",
     '--no-first-run', '--no-default-browser-check',
