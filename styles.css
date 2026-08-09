@@ -271,6 +271,10 @@ button { cursor: pointer; border: none; background: none; }
   display: grid; place-items: center;
 }
 .tbtn:active { background: var(--line); }
+/* ♪ 만으로는 뭔지 알기 어려워 글자를 붙인다 */
+.tbtn.labeled { display: flex; flex-direction: column; gap: 1px; font-size: 17px; line-height: 1; }
+.tbtn.labeled small { font-size: 9px; color: var(--dim); font-weight: 600; }
+.tbtn.has-music small { color: var(--lat); }
 .tbtn.play {
   width: 76px; height: 76px; border-radius: 26px;
   background: var(--accent); color: #1a1206;

@@ -264,7 +264,41 @@
       });
     })
     .then(function () {
-      head('5. 이 기기의 지원 현황');
+      head('5. 음원 템포 자동 인식 (10종목 전부)');
+      // 템포를 아는 음원을 만들어서 인식기가 그 값을 되찾는지 본다.
+      // 공식 템포와 "70% 로 느리게 만든 연습용" 두 가지를 모두 확인한다 —
+      // 느린 음원을 두 배로 잘못 올리는 것이 이런 인식기의 대표적인 실수다.
+      var cases = [];
+      DSM.Dances.list.forEach(function (d) {
+        cases.push({ d: d, bpm: d.bpm.def, tag: '공식' });
+        cases.push({ d: d, bpm: Math.round(d.bpm.def * 0.7), tag: '70% 연습용' });
+      });
+
+      var failed = [], worst = 0, lines = [];
+      return cases.reduce(function (chain, c) {
+        return chain.then(function () {
+          var opts = { countInMode: 'off', voiceStyleId: 'off' };
+          return DSM.Audio.renderOffline(c.d, c.bpm, opts, 24, null).then(function (buf) {
+            var r = DSM.Music.detectTempo(buf, c.d);
+            var name = c.d.ko + ' ' + c.bpm + 'BPM(' + c.tag + ')';
+            if (!r) { failed.push(name + ' 인식실패'); return; }
+            var err = Math.abs(r.bpm - c.bpm);
+            if (err > worst) worst = err;
+            // 다운비트는 마디 경계에서 재야 한다 (한 바퀴 돌아온 것도 정답)
+            var bar = 60 / c.bpm * c.d.beatsPerBar;
+            var off = Math.min(r.offset % bar, bar - (r.offset % bar));
+            if (err > 1.5) failed.push(name + ' → ' + r.bpm.toFixed(1));
+            else if (off > 0.05) failed.push(name + ' 다운비트 ' + ms(off));
+            else lines.push(c.d.short + (c.tag === '공식' ? '' : '·70%'));
+          });
+        });
+      }, Promise.resolve()).then(function () {
+        ok(failed.length === 0, '20개 음원 모두 템포·다운비트 인식 성공',
+           failed.length ? failed.join(' / ') : '최대 오차 ' + worst.toFixed(2) + ' BPM · ' + lines.length + '건');
+      });
+    })
+    .then(function () {
+      head('6. 이 기기의 지원 현황');
       ok(!!(window.AudioContext || window.webkitAudioContext), 'Web Audio 지원');
       ok(!!OAC, '오프라인 렌더 지원 (이 진단이 쓰는 기능)');
       ok('wakeLock' in navigator, '화면 꺼짐 방지 (Wake Lock)',

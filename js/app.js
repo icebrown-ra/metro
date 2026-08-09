@@ -500,6 +500,7 @@ DSM.App = (function () {
 
   var align = null;      // { bpm, offset, rmsMs, taps }
   var startBar = 0;
+  var autoInfo = null;   // 자동 인식 결과 (신뢰도 표시용)
 
   function openMusic() {
     renderTrackList();
@@ -560,9 +561,11 @@ DSM.App = (function () {
       return;
     }
     var mpm = align.bpm / (cur ? cur.beatsPerBar : 4);
+    var how = (align.rmsMs !== undefined)
+      ? ' · 탭 편차 ±' + Math.round(align.rmsMs) + 'ms'
+      : (autoInfo ? ' · 자동 인식' + (autoInfo.confidence < 3 ? ' (확신 낮음 — 들어보고 맞는지 확인하세요)' : '') : '');
     res.innerHTML = '<b>' + align.bpm.toFixed(1) + ' BPM</b> · ' + mpm.toFixed(1) + ' MPM<br>' +
-      '첫 다운비트 ' + align.offset.toFixed(2) + '초' +
-      (align.rmsMs !== undefined ? ' · 탭 편차 ±' + Math.round(align.rmsMs) + 'ms' : '');
+      '첫 다운비트 ' + align.offset.toFixed(2) + '초' + how;
     res.className = 'alignresult good';
     $('tune-wrap').hidden = false;
     $('align-apply').disabled = false;
@@ -947,12 +950,32 @@ DSM.App = (function () {
       DSM.Audio.init();
       toast('불러오는 중…');
       DSM.Music.loadFile(f).then(function (t) {
-        align = null; startBar = 0;
+        // 전에 이 곡을 맞춰둔 적이 있으면 그 정렬을 그대로 쓴다 (탭을 다시 할 필요 없음)
+        align = t.align || null;
+        startBar = t.startBar || 0;
         DSM.Music.tapReset();
         $('tap-count').textContent = '0';
         $('align-panel').hidden = false;
         paintAlign();
-        toast(t.name + ' (' + DSM.Music.fmtTime(t.buffer.duration) + ')');
+
+        if (align) { toast(t.name + ' — 전에 맞춰둔 정렬을 불러왔습니다'); return; }
+
+        // 처음 보는 곡이면 템포를 자동으로 찾아본다
+        $('align-result').textContent = '템포를 찾는 중…';
+        setTimeout(function () {
+          var d = null;
+          try { d = DSM.Music.detectTempo(t.buffer, cur); } catch (e) { d = null; }
+          if (d) {
+            align = { bpm: d.bpm, offset: d.offset };
+            DSM.Music.setAlign(align);
+            autoInfo = d;
+            paintAlign();
+            toast('자동으로 찾았습니다 — ' + d.bpm.toFixed(1) + ' BPM');
+          } else {
+            paintAlign();
+            toast('자동 인식 실패 — 박에 맞춰 탭해주세요');
+          }
+        }, 60);
       }).catch(function () {
         toast('이 파일은 열 수 없습니다 (DRM 이거나 지원하지 않는 형식)');
       });
@@ -973,6 +996,7 @@ DSM.App = (function () {
     $('align-reset').addEventListener('click', function () {
       DSM.Music.tapReset();
       align = null;
+      autoInfo = null;
       $('tap-count').textContent = '0';
       paintAlign();
     });
@@ -981,7 +1005,7 @@ DSM.App = (function () {
       if (!DSM.Audio.previewMusicPlaying()) { toast('먼저 ▶ 듣기를 누르세요'); return; }
       var r = DSM.Music.tap(DSM.Audio.previewMusicPos());
       $('tap-count').textContent = DSM.Music.tapCount();
-      if (r) { align = r; paintAlign(); }
+      if (r) { align = r; autoInfo = null; DSM.Music.setAlign(align); paintAlign(); }
     });
     $('tune-wrap').addEventListener('click', function (e) {
       var b = e.target.closest('button');
