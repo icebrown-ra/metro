@@ -90,6 +90,14 @@ DSM.Voices = (function () {
     });
   }
 
+  /* init() 을 거치지 않고 decode/trim 을 쓰는 호출자(음원 모듈·진단 페이지)가 있어서
+   * 컨텍스트를 지연 조회한다. 이게 없으면 ctx 가 null 인 채로 터진다. */
+  function actx() {
+    if (!ctx && window.DSM && DSM.Audio && DSM.Audio.context) ctx = DSM.Audio.context() || null;
+    if (!ctx && DSM.Audio && DSM.Audio.init) ctx = DSM.Audio.init();
+    return ctx;
+  }
+
   /* ---------------- 오디오 유틸 ---------------- */
 
   /* 앞뒤 무음을 잘라낸다.
@@ -116,7 +124,7 @@ DSM.Voices = (function () {
     end = Math.min(n - 1, end + pad);
     var len = end - start + 1;
 
-    var out = ctx.createBuffer(ch, len, buffer.sampleRate);
+    var out = actx().createBuffer(ch, len, buffer.sampleRate);
     for (var c3 = 0; c3 < ch; c3++) {
       out.getChannelData(c3).set(data[c3].subarray(start, end + 1));
     }
@@ -138,6 +146,27 @@ DSM.Voices = (function () {
       for (var j = 0; j < d2.length; j++) d2[j] *= gain;
     }
     return buffer;
+  }
+
+  /* 체감 시작점(P-center 근사) — 자기 피크의 25% 에 처음 도달하는 시각.
+   *
+   * "쓰리"의 ㅆ, "투"의 기음처럼 앞이 무딘 음절은 파일 시작을 박에 맞춰도
+   * 귀에는 늦게 들린다(측정해보니 최대 73ms). 그래서 재생할 때 이만큼
+   * 앞당겨 예약해 체감 시작점이 박에 오게 한다. 파일을 더 자르면 발음이
+   * 뭉개지므로 자르지 않고 예약 시각으로 보정한다. */
+  var leadCache = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
+
+  function leadOf(buffer) {
+    if (!buffer) return 0;
+    if (leadCache && leadCache.has(buffer)) return leadCache.get(buffer);
+    var d = buffer.getChannelData(0);
+    var pk = 0, i;
+    for (i = 0; i < d.length; i++) { var v = Math.abs(d[i]); if (v > pk) pk = v; }
+    var th = pk * 0.25;
+    for (i = 0; i < d.length && Math.abs(d[i]) < th; i++) { }
+    var lead = Math.min(0.12, i / buffer.sampleRate);   // 병적인 경우 방지
+    if (leadCache) leadCache.set(buffer, lead);
+    return lead;
   }
 
   /* AudioBuffer -> 16bit WAV ArrayBuffer (IndexedDB 저장 · 도구 내보내기용) */
@@ -167,8 +196,10 @@ DSM.Voices = (function () {
 
   function decode(arrayBuffer) {
     return new Promise(function (resolve, reject) {
+      var c = actx();
+      if (!c) { reject(new Error('AudioContext 없음')); return; }
       // Safari 는 Promise 형태를 늦게 지원했으므로 콜백 형태도 함께 받는다
-      var p = ctx.decodeAudioData(arrayBuffer, resolve, reject);
+      var p = c.decodeAudioData(arrayBuffer, resolve, reject);
       if (p && p.then) p.then(resolve, reject);
     });
   }
@@ -312,6 +343,8 @@ DSM.Voices = (function () {
     coverage: coverage,
     saveSyllable: saveSyllable,
     deletePack: deletePack,
+    leadOf: leadOf,
+    getLead: function (key) { return leadOf(getBuffer(key)); },
     // 도구·음원 모듈이 재사용
     trim: trim,
     normalize: normalize,

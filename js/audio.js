@@ -16,7 +16,7 @@ DSM.Audio = (function () {
 
   var LOOKAHEAD_MS = 25;     // 스케줄러가 깨어나는 주기
   var SCHEDULE_AHEAD = 0.12; // 미리 예약해 두는 시간(초)
-  var RESUME_DELAY = 0.06;   // 재개 시 첫 소리까지의 여유
+  var RESUME_DELAY = 0.18;   // 첫 소리까지의 여유. 음절 선행 보정(최대 120ms)보다 커야 한다
 
   var ctx = null;
   var master = null, busClick = null, busVoice = null, busMusic = null;
@@ -107,43 +107,60 @@ DSM.Audio = (function () {
     busClick.connect(master); busVoice.connect(master); busMusic.connect(master);
     master.connect(ctx.destination);
 
-    var len = Math.floor(ctx.sampleRate * 0.25);
-    noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
-    var d = noiseBuf.getChannelData(0);
-    for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    noiseBuf = makeNoise(ctx);
 
     return ctx;
   }
 
-  function playClick(kind, time) {
-    var theme = THEMES[st.theme] || THEMES.click;
+  /* 노이즈는 고정 시드로 만든다. 백색소음이라 소리는 매번 같게 들리지만,
+   * 렌더 결과가 재현되므로 진단 측정값이 실행마다 흔들리지 않는다. */
+  function makeNoise(actx) {
+    var len = Math.floor(actx.sampleRate * 0.25);
+    var b = actx.createBuffer(1, len, actx.sampleRate);
+    var d = b.getChannelData(0);
+    var s = 0x2f6e2b1;                       // 고정 시드
+    for (var i = 0; i < len; i++) {
+      s = (s * 1664525 + 1013904223) >>> 0;  // LCG
+      d[i] = (s / 0x80000000) - 1;
+    }
+    return b;
+  }
+
+  /* 실시간 재생과 오프라인 렌더가 같은 합성 코드를 쓰도록 컨텍스트를 인자로 받는다.
+   * 덕분에 진단 페이지가 "실제로 나는 소리"를 그대로 렌더해 검사할 수 있다. */
+  function synthClick(actx, dest, themeName, kind, time, noise) {
+    var theme = THEMES[themeName] || THEMES.click;
     var c = theme[kind];
     if (!c) return;
 
     if (theme.noise) {
-      var src = ctx.createBufferSource();
-      src.buffer = noiseBuf;
-      var bp = ctx.createBiquadFilter();
+      var src = actx.createBufferSource();
+      src.buffer = noise;
+      var bp = actx.createBiquadFilter();
       bp.type = 'bandpass'; bp.frequency.value = c.f; bp.Q.value = c.q;
-      var g = ctx.createGain();
+      var g = actx.createGain();
       g.gain.setValueAtTime(0.0001, time);
       g.gain.linearRampToValueAtTime(c.g, time + 0.0012);
       g.gain.exponentialRampToValueAtTime(0.0001, time + c.d);
-      src.connect(bp); bp.connect(g); g.connect(busClick);
+      src.connect(bp); bp.connect(g); g.connect(dest);
       src.start(time); src.stop(time + c.d + 0.02);
     }
 
     if (c.tone > 0) {
-      var o = ctx.createOscillator();
-      o.type = (st.theme === 'beep') ? 'square' : 'sine';
+      var o = actx.createOscillator();
+      o.type = (themeName === 'beep') ? 'square' : 'sine';
       o.frequency.setValueAtTime(c.f, time);
-      var og = ctx.createGain();
+      var og = actx.createGain();
       og.gain.setValueAtTime(0.0001, time);
       og.gain.linearRampToValueAtTime(c.g * c.tone, time + 0.0012);
       og.gain.exponentialRampToValueAtTime(0.0001, time + c.d * 0.85);
-      o.connect(og); og.connect(busClick);
+      o.connect(og); og.connect(dest);
       o.start(time); o.stop(time + c.d + 0.02);
     }
+  }
+
+  function playClick(kind, time) {
+    synthClick(ctx, busClick, st.theme, kind, time, noiseBuf);
   }
 
   function playVoice(key, time) {
@@ -153,7 +170,8 @@ DSM.Audio = (function () {
     var src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(busVoice);
-    src.start(time);
+    // 앞이 무딘 음절(ㅆ·ㅌ 등)은 그만큼 앞당겨야 박에 맞게 들린다
+    src.start(Math.max(ctx.currentTime, time - DSM.Voices.leadOf(buf)));
     return buf.duration;
   }
 
@@ -179,16 +197,32 @@ DSM.Audio = (function () {
     return gap;
   }
 
-  function applyPatterns(opts) {
-    var d = st.dance;
-    st.clickPat = opts.simple ? DSM.Dances.simpleClick(d) : d.click.slice();
+  function buildPatterns(dance, opts) {
+    var click = opts.simple ? DSM.Dances.simpleClick(dance) : dance.click.slice();
+    var voice = (opts.voiceStyleId === 'off')
+      ? new Array(dance.slotsPerBar).fill('')
+      : DSM.Dances.voiceStyle(dance, opts.voiceStyleId).seq.slice();
+    return { click: click, voice: voice, gap: buildVoiceGap(voice) };
+  }
 
-    if (opts.voiceStyleId === 'off') {
-      st.voicePat = new Array(d.slotsPerBar).fill('');
-    } else {
-      st.voicePat = DSM.Dances.voiceStyle(d, opts.voiceStyleId).seq.slice();
+  function applyPatterns(opts) {
+    var p = buildPatterns(st.dance, opts);
+    st.clickPat = p.click;
+    st.voicePat = p.voice;
+    st.voiceGap = p.gap;
+  }
+
+  /* 한 이벤트에서 어떤 클릭 음색과 음절이 나야 하는지.
+   * 실시간 스케줄러와 오프라인 렌더가 이 한 곳만 본다 — 둘이 갈라지지 않게. */
+  function slotSound(pat, ev, phraseAccent) {
+    if (ev.phase === 'countin') {
+      return ev.beat >= 0
+        ? { click: 'C', voice: String(ev.beat + 1) }
+        : { click: '', voice: '' };
     }
-    st.voiceGap = buildVoiceGap(st.voicePat);
+    var c = pat.click[ev.slot] || '';
+    if (phraseAccent && ev.slot === 0 && (ev.bar % 8 === 0) && c === 'A') c = 'P';
+    return { click: c, voice: pat.voice[ev.slot] || '' };
   }
 
   function secondsPerTick() { return DSM.Dances.tickSeconds(st.dance, st.bpm); }
@@ -197,45 +231,48 @@ DSM.Audio = (function () {
 
   function scheduleTick(time) {
     var spt = secondsPerTick();
+    var onBeat = (st.tick % st.tpb) === 0;
+    var ev = {
+      phase: st.phase,
+      slot: st.phase === 'main' ? (st.tick % st.slotsPerBar) : -1,
+      beat: onBeat ? (st.tick / st.tpb) : -1,
+      bar: st.bar
+    };
+    var snd = slotSound({ click: st.clickPat, voice: st.voicePat }, ev, st.phraseAccent);
 
-    if (st.phase === 'countin') {
-      if (st.tick % st.tpb === 0) {
-        var beat = st.tick / st.tpb;             // 0-based
-        playClick('C', time);
-        if (vol.voice > 0) playVoice(String(beat + 1), time);
+    if (snd.click) playClick(snd.click, time);
+
+    if (snd.voice && vol.voice > 0) {
+      if (ev.phase === 'countin') {
+        playVoice(snd.voice, time);
+      } else {
+        // 분할박 음절이 다음 음절을 덮어버릴 만큼 빠르면 생략한다.
+        // 박 위의 음절은 절대 생략하지 않는다.
+        var dur = voiceDuration(snd.voice);
+        var gapSec = st.voiceGap[ev.slot] * spt;
+        if (!(!onBeat && dur > gapSec)) playVoice(snd.voice, time);
+      }
+    }
+
+    if (ev.phase === 'countin') {
+      if (ev.beat >= 0) {
         visualQ.push({
           t: time, phase: 'countin',
-          remaining: st.countInBeats - beat,
-          beat: beat, accent: false
+          remaining: st.countInBeats - ev.beat,
+          beat: ev.beat, accent: false
         });
       }
       return;
     }
 
-    var slot = st.tick % st.slotsPerBar;
-    var isPhraseHead = st.phraseAccent && slot === 0 && (st.bar % 8 === 0);
-
-    var c = st.clickPat[slot];
-    if (c) playClick(isPhraseHead && c === 'A' ? 'P' : c, time);
-
-    var v = st.voicePat[slot];
-    if (v && vol.voice > 0) {
-      var dur = voiceDuration(v);
-      var gapSec = st.voiceGap[slot] * spt;
-      var isSubdivision = (st.tick % st.tpb) !== 0;
-      // 분할박 음절이 다음 음절을 덮어버릴 만큼 빠르면 생략한다.
-      // 박 위의 음절은 절대 생략하지 않는다.
-      if (!(isSubdivision && dur > gapSec)) playVoice(v, time);
-    }
-
     visualQ.push({
       t: time, phase: 'main',
-      slot: slot,
-      beat: Math.floor(slot / st.tpb),
-      onBeat: (slot % st.tpb) === 0,
+      slot: ev.slot,
+      beat: Math.floor(ev.slot / st.tpb),
+      onBeat: onBeat,
       bar: st.bar,
       phrase: st.bar % 8,
-      accent: slot === 0
+      accent: ev.slot === 0
     });
   }
 
@@ -286,6 +323,46 @@ DSM.Audio = (function () {
       advance();
       if (st.phase === 'main' && st.status === 'countin') st.status = 'playing';
     }
+  }
+
+  /* 실제로 나는 소리를 그대로 오프라인 렌더한다. 진단 페이지가 렌더된 PCM에서
+   * 클릭 위치를 직접 재서 "귀로 듣는 것과 같은 경로"를 검증할 수 있게 하려는 것.
+   * 재생 시각·음색·패턴 선택 로직을 모두 실시간 경로와 공유한다. */
+  function renderOffline(dance, bpm, opts, seconds, voiceBuffers) {
+    var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OAC) return Promise.reject(new Error('OfflineAudioContext 미지원'));
+
+    var rate = 44100;
+    var oc = new OAC(1, Math.max(1, Math.ceil(seconds * rate)), rate);
+    var noise = makeNoise(oc);
+    var bus = oc.createGain();
+    bus.gain.value = 1;
+    bus.connect(oc.destination);
+
+    var pat = buildPatterns(dance, opts);
+    var theme = opts.theme || 'click';
+    var phrase = opts.phraseAccent !== false;
+    var wantClicks = opts.renderClicks !== false;
+    var wantVoices = opts.renderVoices !== false && !!voiceBuffers;
+
+    plan(dance, bpm, opts, seconds).forEach(function (ev) {
+      if (ev.t >= seconds) return;
+      var snd = slotSound(pat, ev, phrase);
+      if (wantClicks && snd.click) synthClick(oc, bus, theme, snd.click, ev.t, noise);
+      if (wantVoices && snd.voice && voiceBuffers[snd.voice]) {
+        var vb = voiceBuffers[snd.voice];
+        var s = oc.createBufferSource();
+        s.buffer = vb;
+        s.connect(bus);
+        s.start(Math.max(0, ev.t - DSM.Voices.leadOf(vb)));   // 재생 경로와 동일한 보정
+      }
+    });
+
+    var p = oc.startRendering();
+    if (p && p.then) return p;
+    return new Promise(function (resolve) {          // 구형 Safari 콜백 형태
+      oc.oncomplete = function (e) { resolve(e.renderedBuffer); };
+    });
   }
 
   /* ---------------- 화면 동기화 ---------------- */
@@ -595,6 +672,9 @@ DSM.Audio = (function () {
     previewMusicPlaying: previewMusicPlaying,
     onTick: function (fn) { onTick = fn; if (!rafId) pump(); },
     plan: plan,
+    renderOffline: renderOffline,
+    buildPatterns: buildPatterns,
+    slotSound: slotSound,
     THEMES: THEMES
   };
 })();

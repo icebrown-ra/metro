@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>진단</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d12">
+<style>
+  :root { --bg:#0b0d12; --panel:#151a24; --line:#2a3140; --txt:#e9edf5; --dim:#8e99ad;
+          --ok:#5ecf7f; --bad:#ff6b6b; --warn:#e8b84b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); padding:16px 14px 60px;
+         font:14px/1.55 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+         max-width:640px; margin-inline:auto; }
+  h1 { font-size:19px; margin:0 0 4px; }
+  .sub { color:var(--dim); font-size:12px; margin-bottom:16px; }
+  #summary { padding:14px 16px; border-radius:14px; background:var(--panel); margin-bottom:18px; font-weight:700; font-size:16px; }
+  #summary.pass { color:var(--ok); } #summary.fail { color:var(--bad); } #summary.run { color:var(--warn); }
+  h2 { font-size:12px; color:var(--dim); letter-spacing:.05em; margin:22px 0 8px; }
+  .row { display:flex; gap:10px; padding:9px 12px; background:var(--panel); border-radius:10px; margin-bottom:5px; align-items:flex-start; }
+  .badge { flex:0 0 auto; width:20px; font-weight:800; }
+  .badge.ok { color:var(--ok); } .badge.bad { color:var(--bad); } .badge.info { color:var(--dim); }
+  .what { flex:1; }
+  .detail { color:var(--dim); font-size:12px; margin-top:2px; word-break:break-all; }
+  button { font:inherit; color:inherit; border:none; border-radius:12px; background:var(--panel);
+           padding:15px; width:100%; font-weight:700; cursor:pointer; margin-bottom:8px;
+           touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+  button.primary { background:var(--warn); color:#1a1206; }
+  a { color:var(--warn); }
+</style>
+</head>
+<body>
+<h1>댄스스포츠 메트로놈 — 진단</h1>
+<div class="sub" id="env"></div>
+<div id="summary" class="run">검사 중…</div>
+<div id="out"></div>
+
+<h2>귀로 확인</h2>
+<button class="primary" id="hear">차차차 소리 재생 (예비 8박 + 2마디)</button>
+<button id="hear2">퀵스텝 소리 재생 (가장 빠른 종목)</button>
+<div class="sub">아이폰은 <b>무음 모드를 해제</b>해야 소리가 납니다. 아무 소리도 안 들리면 그게 원인입니다.</div>
+<p><a href="./">← 앱으로</a></p>
+
+<script src="js/dances.js"></script>
+<script src="js/voices.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/music.js"></script>
+<script>
+(function () {
+  var out = document.getElementById('out');
+  var pass = 0, fail = 0;
+  var results = [];              // 자동화(CDP)가 읽어가는 기계용 결과
+  var section = '';
+
+  function add(state, what, detail) {
+    if (state === 'ok') pass++; else if (state === 'bad') fail++;
+    results.push({ section: section, state: state, what: what, detail: detail || '' });
+    var d = document.createElement('div');
+    d.className = 'row';
+    d.innerHTML = '<span class="badge ' + state + '">' +
+      (state === 'ok' ? '✓' : state === 'bad' ? '✕' : 'ⓘ') + '</span>' +
+      '<span class="what">' + what + (detail ? '<div class="detail">' + detail + '</div>' : '') + '</span>';
+    out.appendChild(d);
+  }
+  function head(t) { section = t; var h = document.createElement('h2'); h.textContent = t; out.appendChild(h); }
+  function ok(cond, what, detail) { add(cond ? 'ok' : 'bad', what, detail); return cond; }
+  function ms(x) { return (Math.round(x * 10000) / 10) + 'ms'; }
+
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  document.getElementById('env').textContent =
+    location.host + ' · ' + (isIOS ? 'iOS' : navigator.platform) +
+    ' · ' + (standalone ? '홈 화면 앱' : '브라우저');
+
+  /* ---------- 렌더된 PCM 에서 클릭 시작점 찾기 ---------- */
+  function detectOnsets(data, rate, relThresh, refractoryMs) {
+    var peakAll = 0, i;
+    for (i = 0; i < data.length; i++) { var a = Math.abs(data[i]); if (a > peakAll) peakAll = a; }
+    var th = peakAll * relThresh;
+    var refr = Math.floor(refractoryMs / 1000 * rate);
+    var res = [];
+    i = 0;
+    while (i < data.length) {
+      if (Math.abs(data[i]) >= th) {
+        var end = Math.min(data.length, i + refr);
+        var pk = 0;
+        for (var j = i; j < end; j++) { var b = Math.abs(data[j]); if (b > pk) pk = b; }
+        res.push({ t: i / rate, peak: pk });
+        i = end;
+      } else i++;
+    }
+    return { onsets: res, peak: peakAll };
+  }
+
+  /* 실시간 재생과 같은 코드로 "이 시각에 클릭이 나야 한다"를 계산 */
+  function expectedClicks(dance, bpm, opts, seconds) {
+    var pat = DSM.Audio.buildPatterns(dance, opts);
+    return DSM.Audio.plan(dance, bpm, opts, seconds)
+      .filter(function (ev) { return ev.t < seconds; })
+      .map(function (ev) { return { t: ev.t, snd: DSM.Audio.slotSound(pat, ev, opts.phraseAccent !== false) }; })
+      .filter(function (e) { return !!e.snd.click; });
+  }
+
+  function timingCheck(danceId, bpm, opts, seconds, label) {
+    var d = DSM.Dances.get(danceId);
+    var exp = expectedClicks(d, bpm, opts, seconds);
+    return DSM.Audio.renderOffline(d, bpm, opts, seconds, null).then(function (buf) {
+      var r = detectOnsets(buf.getChannelData(0), buf.sampleRate, 0.06, 30);
+      var got = r.onsets;
+      if (!ok(got.length === exp.length,
+              label + ' — 클릭 개수 ' + exp.length + '개',
+              '측정 ' + got.length + '개 · 렌더 피크 ' + r.peak.toFixed(2))) {
+        return null;
+      }
+      var maxDev = 0, sum = 0;
+      for (var i = 0; i < exp.length; i++) {
+        var dev = Math.abs(got[i].t - exp[i].t);
+        if (dev > maxDev) maxDev = dev;
+        sum += dev;
+      }
+      ok(maxDev < 0.003, label + ' — 모든 클릭이 예정 시각 ±3ms 이내',
+         '최대 오차 ' + ms(maxDev) + ' · 평균 ' + ms(sum / exp.length));
+      return { exp: exp, got: got };
+    });
+  }
+
+  /* ---------- 실행 ---------- */
+  /* 진단에는 오디오 장치가 필요 없다. 디코딩까지 OfflineAudioContext 로 처리하면
+   * 헤드리스에서도 멈추지 않고, 아이폰에서 제스처 없이 AudioContext 를 만들지도 않는다.
+   * 실시간 컨텍스트는 아래 "귀로 확인" 버튼을 눌렀을 때만 생긴다. */
+  var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  var decodeCtx = new OAC(1, 1, 44100);
+  DSM.Voices.init(decodeCtx);
+  var voiceBufs = {};
+
+  head('1. 배포 자산 (실제 네트워크)');
+
+  var assetJobs = ['manifest.webmanifest', 'sw.js', 'styles.css', 'index.html'].map(function (p) {
+    return fetch(p, { cache: 'no-store' }).then(function (r) {
+      return ok(r.ok, p, 'HTTP ' + r.status);
+    }).catch(function (e) { return ok(false, p, e.message); });
+  });
+
+  Promise.all(assetJobs)
+    .then(function () {
+      return fetch('manifest.webmanifest').then(function (r) { return r.json(); }).then(function (m) {
+        ok(m.display === 'standalone', '매니페스트 display=standalone', m.display);
+        ok((m.icons || []).length >= 3, '아이콘 ' + (m.icons || []).length + '종');
+      }).catch(function (e) { ok(false, '매니페스트 파싱', e.message); });
+    })
+    .then(function () {
+      head('2. 음성 파일 (내려받아 디코딩)');
+      var keys = DSM.Voices.SYLLABLES;
+      var longest = 0, longestKey = '', total = 0, okCount = 0;
+      return Promise.all(keys.map(function (k) {
+        return fetch('audio/voices/ko-heami/' + k + '.wav')
+          .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+          .then(function (ab) { total += ab.byteLength; return DSM.Voices.decode(ab.slice(0)); })
+          .then(function (buf) {
+            voiceBufs[k] = buf;
+            okCount++;
+            if (buf.duration > longest) { longest = buf.duration; longestKey = k; }
+          })
+          .catch(function (e) { add('bad', '음성 ' + k + '.wav', e.message); });
+      })).then(function () {
+        ok(okCount === keys.length, '한국어 음절 ' + keys.length + '개 로드·디코딩',
+           okCount + '/' + keys.length + ' · ' + Math.round(total / 1024) + 'KB');
+        // 파일 앞이 무디면 음절이 박보다 늦게 "들린다".
+        // 절대 무음이 아니라 자기 피크의 25% 에 도달하는 시점(체감 시작점)으로 잰다.
+        var leads = [];
+        Object.keys(voiceBufs).forEach(function (k) {
+          var b = voiceBufs[k], d = b.getChannelData(0);
+          var pk = 0, i;
+          for (i = 0; i < d.length; i++) { var v = Math.abs(d[i]); if (v > pk) pk = v; }
+          for (i = 0; i < d.length && Math.abs(d[i]) < pk * 0.25; i++) { }
+          leads.push({ k: k, lead: i / b.sampleRate });
+        });
+        leads.sort(function (a, b2) { return b2.lead - a.lead; });
+        add('info', '음절별 선행 보정량 (앞이 무딘 음절은 그만큼 앞당겨 재생)',
+            leads.slice(0, 4).map(function (x) { return x.k + ' ' + ms(x.lead); }).join(' · '));
+
+        var qsBeat = 60 / DSM.Dances.get('quickstep').bpm.def;
+        ok(longest <= qsBeat, '가장 긴 음절이 최속 종목 한 박 안에 들어감',
+           '최장 "' + longestKey + '" ' + ms(longest) + ' vs 퀵스텝 한 박 ' + ms(qsBeat));
+      });
+    })
+    .then(function () {
+      head('3. 오디오 합성 타이밍 (실제로 나는 소리를 렌더해서 실측)');
+      return timingCheck('tango', 120, { countInMode: '8', voiceStyleId: 'off' }, 20.2,
+                         '탱고 120BPM · 예비 8박 + 8마디')
+        .then(function (r) {
+          if (!r) return;
+          var mainStart = r.got[8].t;
+          ok(Math.abs(mainStart - 4.0) < 0.003, '예비 8박이 정확히 4.000초, 그 뒤 본박 시작', ms(mainStart));
+          var bar8 = r.got[8 + 32];   // 본박 첫 클릭 + 8마디(32박)
+          ok(bar8 && Math.abs((bar8.t - mainStart) - 16.0) < 0.003,
+             '본박부터 8마디 = 16.000초 (프레이즈)', bar8 ? ms(bar8.t - mainStart) : '없음');
+          var a = r.got[8].peak, w = r.got[9].peak;
+          ok(a > w * 1.2, '마디 첫박이 약박보다 확실히 큼',
+             '1박 ' + a.toFixed(2) + ' vs 2박 ' + w.toFixed(2));
+        });
+    })
+    .then(function () {
+      return timingCheck('waltz', 87, { countInMode: '8', voiceStyleId: 'off' }, 12,
+                         '왈츠 87BPM · 3박자 예비 보정').then(function (r) {
+        if (!r) return;
+        var six = 6 * (60 / 87);
+        ok(Math.abs(r.got[6].t - six) < 0.003,
+           '왈츠는 8박이 아니라 6박(2마디) 예비 → 본박이 마디 1박에서 시작', ms(r.got[6].t));
+      });
+    })
+    .then(function () {
+      return timingCheck('jive', 172, { countInMode: 'off', voiceStyleId: 'off' }, 6,
+                         '자이브 172BPM · 16분 분할박').then(function (r) {
+        if (!r) return;
+        var beat = 60 / 172;
+        // 3박(index 2) 뒤의 'a' 는 다음 박까지의 3/4 지점
+        var third = r.got[2].t, a1 = r.got[3].t;
+        var frac = (a1 - third) / beat;
+        ok(Math.abs(frac - 0.75) < 0.02,
+           "자이브 'a' 가 박 정중앙이 아니라 3/4 지점", '측정 ' + frac.toFixed(3) + ' (목표 0.750)');
+      });
+    })
+    .then(function () {
+      return timingCheck('samba', 102, { countInMode: 'off', voiceStyleId: 'off' }, 6,
+                         '삼바 102BPM · 1 a 2 a').then(function (r) {
+        if (!r) return;
+        var beat = 60 / 102;
+        var frac = (r.got[1].t - r.got[0].t) / beat;
+        ok(Math.abs(frac - 0.75) < 0.02, "삼바 'a' 가 박의 3/4 지점", '측정 ' + frac.toFixed(3));
+      });
+    })
+    .then(function () {
+      head('4. 음성 카운트 정렬 (음성만 렌더해서 실측)');
+      var cha = DSM.Dances.get('chacha');
+      var opts = { countInMode: 'off', voiceStyleId: 'number', renderClicks: false };
+      var exp = DSM.Audio.plan(cha, 124, opts, 4).filter(function (ev) { return ev.t < 4; });
+      var pat = DSM.Audio.buildPatterns(cha, opts);
+      var expV = exp.map(function (ev) { return { t: ev.t, v: DSM.Audio.slotSound(pat, ev, false).voice }; })
+                    .filter(function (e) { return !!e.v; })
+                    .map(function (e) {
+                      // 실제로 들리게 되는 시각. 맨 처음 음절은 0 이전으로 못 당기므로
+                      // 그 클램프까지 그대로 반영해서 비교한다.
+                      var lead = DSM.Voices.leadOf(voiceBufs[e.v]);
+                      return { t: Math.max(0, e.t - lead) + lead, v: e.v };
+                    });
+      return DSM.Audio.renderOffline(cha, 124, opts, 4, voiceBufs).then(function (buf) {
+        // 보정과 같은 기준(피크의 25%)으로 재야 의미가 있다
+        var r = detectOnsets(buf.getChannelData(0), buf.sampleRate, 0.25, 120);
+        ok(r.onsets.length === expV.length,
+           '차차차 124BPM · "원 투 쓰리 차 차" 음절 ' + expV.length + '개',
+           '측정 ' + r.onsets.length + '개 — ' + expV.map(function (e) { return e.v; }).join(' '));
+        if (r.onsets.length === expV.length) {
+          var maxDev = 0, worstV = '';
+          for (var i = 0; i < expV.length; i++) {
+            var dev = Math.abs(r.onsets[i].t - expV[i].t);
+            if (dev > maxDev) { maxDev = dev; worstV = expV[i].v; }
+          }
+          ok(maxDev < 0.015, '모든 음절의 체감 시작점이 박에 ±15ms 이내',
+             '최대 ' + ms(maxDev) + ' ("' + worstV + '")');
+        }
+      });
+    })
+    .then(function () {
+      head('5. 이 기기의 지원 현황');
+      ok(!!(window.AudioContext || window.webkitAudioContext), 'Web Audio 지원');
+      ok(!!OAC, '오프라인 렌더 지원 (이 진단이 쓰는 기능)');
+      ok('wakeLock' in navigator, '화면 꺼짐 방지 (Wake Lock)',
+         ('wakeLock' in navigator) ? '지원' : 'iOS 16.4 미만이면 미지원 — 자동 잠금 시간을 늘리세요');
+      ok(typeof MediaRecorder !== 'undefined', '내 목소리 녹음 (MediaRecorder)');
+      ok(!!window.indexedDB, '음원·목소리 저장 (IndexedDB)');
+      ok('serviceWorker' in navigator, '오프라인 캐시 (Service Worker)');
+      add(isIOS ? 'info' : 'info', '진동 피드백',
+          isIOS ? 'iOS는 웹 진동 미지원 — 화면 표시로 대체했습니다' : (navigator.vibrate ? '지원' : '미지원'));
+      if (isIOS) add('info', '무음 모드', '무음이면 소리가 나지 않습니다. 측면 스위치나 제어센터에서 해제하세요.');
+      add(standalone ? 'ok' : 'info', standalone ? '홈 화면 앱으로 실행 중' : '브라우저로 실행 중',
+          standalone ? '' : 'Safari 공유 → 홈 화면에 추가 하면 전체화면 앱이 됩니다');
+
+      if ('serviceWorker' in navigator && location.protocol === 'https:') {
+        return navigator.serviceWorker.getRegistrations().then(function (rs) {
+          add(rs.length ? 'ok' : 'info',
+              rs.length ? '서비스워커 등록됨 — 오프라인 동작' : '서비스워커 미등록',
+              rs.length ? '' : '앱(/)을 한 번 열면 등록됩니다');
+          return caches.keys().then(function (ks) {
+            if (!ks.length) return;
+            return caches.open(ks[0]).then(function (c) {
+              return c.keys().then(function (reqs) {
+                add('ok', '캐시된 파일 ' + reqs.length + '개', ks.join(', '));
+              });
+            });
+          });
+        }).catch(function () { });
+      }
+    })
+    .then(finish, function (e) {
+      add('bad', '진단 중 오류', (e && e.message) || String(e));
+      finish();
+    });
+
+  function finish() {
+    var s = document.getElementById('summary');
+    var t = (fail === 0 ? 'ALL PASS' : 'FAILURES') + '  pass=' + pass + '  fail=' + fail;
+    s.textContent = fail === 0 ? '전부 통과 — ' + pass + '개 검사' : fail + '개 실패 / ' + pass + '개 통과';
+    s.className = fail === 0 ? 'pass' : 'fail';
+    document.title = t;
+    window.__diag = { done: true, pass: pass, fail: fail, rows: results };
+  }
+
+  /* ---------- 귀로 확인 ---------- */
+  function hear(danceId, bpm) {
+    DSM.Audio.init();
+    var c = DSM.Audio.context();
+    if (c.state === 'suspended') c.resume();
+    DSM.Voices.init(c).then(function () { return DSM.Voices.select('ko-heami'); }).then(function () {
+      var d = DSM.Dances.get(danceId);
+      DSM.Audio.start(d, bpm, {
+        theme: 'click', phraseAccent: true, simple: false,
+        countInMode: '8', voiceStyleId: null
+      });
+      var bars = 0;
+      DSM.Audio.onTick(function (ev) {
+        if (ev.phase === 'main' && ev.slot === 0) { bars++; if (bars > 2) DSM.Audio.stop(); }
+      });
+    });
+  }
+  document.getElementById('hear').addEventListener('click', function () { hear('chacha', 124); });
+  document.getElementById('hear2').addEventListener('click', function () { hear('quickstep', 204); });
+})();
+</script>
+</body>
+</html>
