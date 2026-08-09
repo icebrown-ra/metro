@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>댄스스포츠 메트로놈</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="댄스스포츠 10종목 공식 템포 메트로놈. 예비박, 음성 카운트, 내 음원에 박자세기 얹기.">
+<meta name="theme-color" content="#0b0d12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="댄스 메트로놈">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============================ 홈 ============================ -->
+<main id="view-home" class="view is-active">
+  <header class="topbar">
+    <h1 class="brand">댄스스포츠<br><b>메트로놈</b></h1>
+    <button class="pillbtn" id="go-stats">기록</button>
+  </header>
+
+  <button class="today" id="today-card">
+    <div class="today-main">
+      <span class="today-label">오늘 연습</span>
+      <span class="today-val" id="today-val">0분</span>
+    </div>
+    <div class="today-side">
+      <div class="bar"><i id="today-fill"></i></div>
+      <span class="today-sub" id="today-sub"></span>
+    </div>
+  </button>
+
+  <section class="group">
+    <h2>스탠다드</h2>
+    <div class="grid" id="grid-standard"></div>
+  </section>
+
+  <section class="group">
+    <h2>라틴</h2>
+    <div class="grid" id="grid-latin"></div>
+  </section>
+
+  <p class="note" id="silent-note" hidden>
+    <b>소리가 안 나면</b> 아이폰 무음 모드를 해제하세요. 웹앱은 무음 스위치의 영향을 받습니다.
+  </p>
+  <p class="note tiny">공식 템포는 WDSF/WDC 경기 규정 기준입니다.</p>
+</main>
+
+<!-- ============================ 플레이어 ============================ -->
+<main id="view-player" class="view">
+  <header class="topbar">
+    <button class="iconbtn" id="go-home" aria-label="뒤로">‹</button>
+    <div class="ptitle">
+      <span id="p-name">—</span>
+      <small id="p-meta"></small>
+    </div>
+    <button class="iconbtn" id="go-settings" aria-label="설정">⚙</button>
+  </header>
+
+  <div class="stage">
+    <div class="countin" id="countin" hidden>
+      <b id="countin-num">8</b>
+      <span>예비박</span>
+    </div>
+    <div class="beats" id="beats"></div>
+    <div class="barinfo">
+      <span id="bar-num">준비</span>
+      <span class="dot-sep" id="phrase-wrap" hidden>프레이즈 <b id="phrase-num">1</b>/8</span>
+    </div>
+  </div>
+
+  <div class="tempo">
+    <div class="bpm-row">
+      <button class="stepbtn" id="bpm-minus" aria-label="느리게">−</button>
+      <div class="bpm-box">
+        <div class="bpm-main">
+          <input id="bpm-input" type="number" inputmode="numeric" min="20" max="400" value="120">
+          <span class="unit">BPM</span>
+        </div>
+        <div class="bpm-sub" id="tempo-sub">— MPM · 100%</div>
+      </div>
+      <button class="stepbtn" id="bpm-plus" aria-label="빠르게">+</button>
+    </div>
+
+    <div class="slider-wrap">
+      <div class="track"><i class="official" id="official-band"></i></div>
+      <input id="pct-slider" type="range" min="40" max="120" step="1" value="100" aria-label="공식 대비 속도">
+    </div>
+
+    <div class="chips" id="pct-chips"></div>
+  </div>
+
+  <div class="musicbar" id="musicbar" hidden>
+    <div class="mrow">
+      <span class="mname" id="m-name">—</span>
+      <button class="linkbtn" id="m-edit">정렬</button>
+      <button class="linkbtn" id="m-detach">해제</button>
+    </div>
+    <div class="mprog"><i id="m-fill"></i></div>
+    <div class="mrow tiny">
+      <span id="m-time">0:00</span>
+      <span id="m-info"></span>
+    </div>
+  </div>
+
+  <div class="transport">
+    <button class="tbtn" id="btn-stop" aria-label="정지">■</button>
+    <button class="tbtn play" id="btn-play" aria-label="시작">▶</button>
+    <button class="tbtn" id="btn-music" aria-label="음원 얹기">♪</button>
+  </div>
+</main>
+
+<!-- ============================ 기록 ============================ -->
+<main id="view-stats" class="view">
+  <header class="topbar">
+    <button class="iconbtn" id="stats-back" aria-label="뒤로">‹</button>
+    <h1 class="brand"><b>연습 기록</b></h1>
+    <span class="spacer"></span>
+  </header>
+
+  <div class="statcards" id="stat-cards"></div>
+
+  <section class="group">
+    <div class="grouphead">
+      <h2>최근</h2>
+      <div class="seg" id="range-seg">
+        <button data-days="7" class="on">7일</button>
+        <button data-days="30">30일</button>
+      </div>
+    </div>
+    <div class="chart" id="chart"></div>
+  </section>
+
+  <section class="group">
+    <h2>종목별</h2>
+    <div class="bars" id="by-dance"></div>
+  </section>
+
+  <section class="group">
+    <h2>하루 목표</h2>
+    <div class="goalrow">
+      <input id="goal-input" type="number" inputmode="numeric" min="1" max="600" value="30">
+      <span>분</span>
+      <button class="linkbtn" id="goal-save">저장</button>
+    </div>
+  </section>
+
+  <div class="rowbtns">
+    <button class="ghost" id="export-stats">내보내기</button>
+    <button class="ghost" id="import-stats">불러오기</button>
+    <button class="ghost danger" id="reset-stats">기록 삭제</button>
+  </div>
+  <input type="file" id="import-file" accept="application/json,.json" hidden>
+</main>
+
+<!-- ============================ 설정 시트 ============================ -->
+<div class="backdrop" id="backdrop" hidden></div>
+
+<section class="sheet" id="sheet-settings" hidden>
+  <div class="sheethead">
+    <h2>설정</h2>
+    <button class="iconbtn" data-close aria-label="닫기">✕</button>
+  </div>
+  <div class="sheetbody">
+
+    <div class="field">
+      <label>목소리</label>
+      <div class="radios" id="voice-list"></div>
+      <div class="rowbtns">
+        <button class="ghost" id="voice-preview">미리듣기</button>
+        <button class="ghost" id="voice-record">내 목소리 녹음</button>
+      </div>
+      <p class="hint" id="voice-hint"></p>
+    </div>
+
+    <div class="field">
+      <label>카운트 방식</label>
+      <div class="seg wrap" id="count-style"></div>
+    </div>
+
+    <div class="field">
+      <label>예비박</label>
+      <div class="seg wrap" id="countin-mode"></div>
+      <p class="hint" id="countin-hint"></p>
+    </div>
+
+    <div class="field">
+      <label>클릭음</label>
+      <div class="seg wrap" id="theme-seg"></div>
+    </div>
+
+    <div class="field">
+      <label>볼륨</label>
+      <div class="vol"><span>클릭</span><input type="range" id="vol-click" min="0" max="100" value="90"></div>
+      <div class="vol"><span>음성</span><input type="range" id="vol-voice" min="0" max="100" value="90"></div>
+      <div class="vol"><span>음원</span><input type="range" id="vol-music" min="0" max="100" value="80"></div>
+    </div>
+
+    <div class="field">
+      <label class="switch">
+        <input type="checkbox" id="opt-simple"><span></span>
+        <em>심플 모드<small>분할박 없이 1박만 강조</small></em>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="opt-phrase" checked><span></span>
+        <em>8마디 프레이즈 강조<small>8마디마다 첫 박을 더 세게</small></em>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="opt-wake" checked><span></span>
+        <em>화면 켜두기<small>연습 중 화면이 꺼지지 않게</small></em>
+      </label>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============================ 음원 시트 ============================ -->
+<section class="sheet" id="sheet-music" hidden>
+  <div class="sheethead">
+    <h2>음원에 박자세기 얹기</h2>
+    <button class="iconbtn" data-close aria-label="닫기">✕</button>
+  </div>
+  <div class="sheetbody">
+
+    <div class="field">
+      <button class="bigbtn" id="pick-file">폰에서 음원 고르기</button>
+      <input type="file" id="music-file" accept="audio/*" hidden>
+      <p class="hint">파일 앱에 있는 mp3·m4a·wav만 됩니다. 애플뮤직·스포티파이 스트리밍 곡은 열 수 없습니다.</p>
+    </div>
+
+    <div class="field" id="saved-wrap" hidden>
+      <label>저장된 곡</label>
+      <div class="tracklist" id="track-list"></div>
+    </div>
+
+    <div id="align-panel" hidden>
+      <div class="field">
+        <label>정렬 — 곡을 들으면서 박에 맞춰 탭</label>
+        <p class="hint">첫 탭이 <b>마디의 1박</b>이 되도록 하세요. 4번 이상이면 계산되고, 8번이면 더 정확합니다.</p>
+        <div class="rowbtns">
+          <button class="ghost" id="align-play">▶ 듣기</button>
+          <button class="ghost" id="align-reset">다시</button>
+        </div>
+        <button class="tapbtn" id="tap-pad">
+          <b id="tap-count">0</b>
+          <span>탭</span>
+        </button>
+        <div class="alignresult" id="align-result">아직 계산 전</div>
+      </div>
+
+      <div class="field" id="tune-wrap" hidden>
+        <label>미세조정</label>
+        <div class="tunerow">
+          <span>템포</span>
+          <button class="ghost" data-bpm="-0.1">−0.1</button>
+          <b id="tune-bpm">—</b>
+          <button class="ghost" data-bpm="0.1">+0.1</button>
+        </div>
+        <div class="tunerow">
+          <span>시작점</span>
+          <button class="ghost" data-off="-0.01">−10ms</button>
+          <b id="tune-off">—</b>
+          <button class="ghost" data-off="0.01">+10ms</button>
+        </div>
+        <div class="tunerow">
+          <span>배속 보정</span>
+          <button class="ghost" data-scale="0.5">÷2</button>
+          <button class="ghost" data-scale="2">×2</button>
+        </div>
+        <div class="tunerow">
+          <span>시작 마디</span>
+          <button class="ghost" data-bar="-1">−1</button>
+          <b id="tune-bar">1</b>
+          <button class="ghost" data-bar="1">+1</button>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="music-loop"><span></span>
+          <em>곡 반복<small>끝나면 시작 마디부터 다시</small></em>
+        </label>
+      </div>
+
+      <div class="rowbtns">
+        <button class="bigbtn" id="align-apply">이 곡으로 연습하기</button>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============================ 녹음 시트 ============================ -->
+<section class="sheet" id="sheet-record" hidden>
+  <div class="sheethead">
+    <h2>내 목소리 녹음</h2>
+    <button class="iconbtn" data-close aria-label="닫기">✕</button>
+  </div>
+  <div class="sheetbody">
+    <p class="hint">화면의 음절을 하나씩 발음하면 됩니다. 버튼을 <b>누르고 있는 동안</b> 녹음되고, 떼면 앞뒤 무음이 자동으로 잘립니다.</p>
+    <div class="field">
+      <label>팩 이름</label>
+      <input type="text" id="pack-name" value="내 목소리" maxlength="20">
+    </div>
+    <div class="recstage">
+      <div class="recprog" id="rec-prog"></div>
+      <div class="recword" id="rec-word">원</div>
+      <button class="recbtn" id="rec-btn">누르고 말하기</button>
+      <div class="rowbtns">
+        <button class="ghost" id="rec-prev">이전</button>
+        <button class="ghost" id="rec-play">들어보기</button>
+        <button class="ghost" id="rec-next">다음</button>
+      </div>
+      <p class="hint" id="rec-status"></p>
+    </div>
+    <div class="field">
+      <label>또는 파일로 넣기</label>
+      <button class="ghost" id="import-voice">음성 파일 고르기</button>
+      <input type="file" id="import-voice-file" accept="audio/*" multiple hidden>
+      <p class="hint">파일 이름을 음절 키와 같게 하세요 — <b>1.wav, 2.wav … cha.wav, a.wav, and.wav, slow.wav, quick.wav</b>. 일부만 넣어도 되고, 없는 음절은 기본 목소리로 채워집니다.</p>
+    </div>
+    <div class="rowbtns">
+      <button class="bigbtn" id="rec-done">완료</button>
+    </div>
+  </div>
+</section>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="js/dances.js"></script>
+<script src="js/voices.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/music.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

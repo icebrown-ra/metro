@@ -1,0 +1,464 @@
+/* 댄스스포츠 메트로놈 — 세로 화면, 큰 터치 타깃, 다크 고정 */
+
+:root {
+  --bg: #0b0d12;
+  --panel: #151a24;
+  --panel2: #1e2530;
+  --line: #2a3140;
+  --txt: #e9edf5;
+  --dim: #8e99ad;
+  --accent: #e8b84b;
+  --std: #7aa2ff;
+  --lat: #ff8a5c;
+  --danger: #ff6b6b;
+  --r: 16px;
+  --pad: 16px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--txt);
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic",
+               "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+body { min-height: 100vh; }
+
+button, input {
+  font: inherit;
+  color: inherit;
+  touch-action: manipulation;      /* 더블탭 확대 방지 */
+  -webkit-tap-highlight-color: transparent;
+}
+button { cursor: pointer; border: none; background: none; }
+
+/* ---------------- 뷰 전환 ---------------- */
+.view { display: none; }
+.view.is-active { display: block; }
+
+#view-home, #view-stats {
+  padding: calc(var(--safe-t) + 8px) var(--pad) calc(var(--safe-b) + 32px);
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+#view-player.is-active {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  padding: calc(var(--safe-t) + 4px) var(--pad) calc(var(--safe-b) + 10px);
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+/* ---------------- 상단바 ---------------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+}
+.brand { font-size: 17px; line-height: 1.25; margin: 0; font-weight: 500; color: var(--dim); flex: 1; }
+.brand b { color: var(--txt); font-weight: 700; font-size: 20px; }
+.spacer { flex: 1; }
+
+.iconbtn {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--txt);
+  font-size: 22px;
+  display: grid; place-items: center;
+  flex: 0 0 auto;
+}
+.iconbtn:active { background: var(--panel2); }
+
+.pillbtn {
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--txt);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ---------------- 오늘 연습 카드 ---------------- */
+.today {
+  width: 100%;
+  display: flex; align-items: center; gap: 14px;
+  background: var(--panel);
+  border-radius: var(--r);
+  padding: 14px 16px;
+  margin: 6px 0 20px;
+  text-align: left;
+}
+.today-main { display: flex; flex-direction: column; }
+.today-label { font-size: 12px; color: var(--dim); }
+.today-val { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+.today-side { flex: 1; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.bar { width: 100%; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s; }
+.today-sub { font-size: 12px; color: var(--dim); }
+
+/* ---------------- 종목 그리드 ---------------- */
+.group { margin-bottom: 22px; }
+.group h2 { font-size: 13px; color: var(--dim); margin: 0 0 10px 2px; font-weight: 600; letter-spacing: .04em; }
+.grouphead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.grouphead h2 { margin: 0; }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.tile {
+  background: var(--panel);
+  border-radius: var(--r);
+  padding: 14px;
+  text-align: left;
+  min-height: 84px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  border-left: 3px solid var(--line);
+}
+.tile:active { background: var(--panel2); }
+.tile.std { border-left-color: var(--std); }
+.tile.lat { border-left-color: var(--lat); }
+.tile .tname { font-size: 16px; font-weight: 700; }
+.tile .tmeta { font-size: 12px; color: var(--dim); margin-top: 6px; }
+.tile .tmeta b { color: var(--txt); font-weight: 600; }
+
+.note {
+  font-size: 13px; color: var(--dim); line-height: 1.6;
+  background: var(--panel); border-radius: 12px; padding: 12px 14px;
+}
+.note b { color: var(--txt); }
+.note.tiny { background: none; padding: 4px 2px; font-size: 12px; }
+
+/* ---------------- 플레이어: 무대 ---------------- */
+.ptitle { flex: 1; text-align: center; display: flex; flex-direction: column; line-height: 1.2; }
+.ptitle span { font-size: 17px; font-weight: 700; }
+.ptitle small { font-size: 11px; color: var(--dim); margin-top: 2px; }
+
+.stage {
+  flex: 1;
+  min-height: 140px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 18px;
+  position: relative;
+}
+
+.countin {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 2px;
+  background: var(--bg);
+  z-index: 2;
+}
+.countin b {
+  font-size: 96px; font-weight: 800; line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.countin span { font-size: 13px; color: var(--dim); letter-spacing: .1em; }
+
+.beats { display: flex; gap: 14px; align-items: center; justify-content: center; }
+.beat {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--panel2);
+  display: grid; place-items: center;
+  font-size: 15px; font-weight: 700; color: var(--dim);
+  transition: transform .06s ease-out, background .18s, color .18s;
+}
+.beat.sub { width: 12px; height: 12px; font-size: 0; background: var(--line); }
+.beat.on { background: var(--accent); color: #1a1206; transform: scale(1.18); transition: none; }
+.beat.sub.on { background: var(--accent); transform: scale(1.5); }
+.beat.head.on { background: #fff; color: #111; }
+
+.barinfo { font-size: 13px; color: var(--dim); display: flex; gap: 12px; align-items: center; }
+.barinfo b { color: var(--txt); }
+.dot-sep::before { content: "·"; margin-right: 12px; color: var(--line); }
+
+/* ---------------- 플레이어: 템포 ---------------- */
+.tempo { padding: 4px 0 2px; }
+
+.bpm-row { display: flex; align-items: center; gap: 12px; }
+.stepbtn {
+  width: 62px; height: 62px;
+  border-radius: 20px;
+  background: var(--panel);
+  font-size: 30px; font-weight: 300;
+  display: grid; place-items: center;
+  flex: 0 0 auto;
+  user-select: none; -webkit-user-select: none;
+}
+.stepbtn:active { background: var(--accent); color: #1a1206; }
+
+.bpm-box { flex: 1; text-align: center; }
+.bpm-main { display: flex; align-items: baseline; justify-content: center; gap: 4px; }
+#bpm-input {
+  width: 3.2ch;
+  background: none; border: none; padding: 0;
+  font-size: 46px; font-weight: 800; letter-spacing: -0.03em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+#bpm-input::-webkit-outer-spin-button,
+#bpm-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+#bpm-input:focus { outline: none; color: var(--accent); }
+.unit { font-size: 13px; color: var(--dim); font-weight: 600; }
+.bpm-sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
+
+.slider-wrap { position: relative; height: 40px; margin-top: 6px; }
+.slider-wrap .track {
+  position: absolute; left: 0; right: 0; top: 50%;
+  height: 6px; margin-top: -3px;
+  background: var(--line); border-radius: 3px; overflow: hidden;
+}
+.slider-wrap .official { position: absolute; top: 0; bottom: 0; background: rgba(232,184,75,.4); }
+#pct-slider {
+  position: absolute; inset: 0;
+  width: 100%; height: 40px; margin: 0;
+  background: none; -webkit-appearance: none; appearance: none;
+}
+#pct-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--txt);
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
+}
+#pct-slider::-moz-range-thumb {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--txt); border: none;
+}
+
+.chips { display: flex; gap: 8px; margin-top: 8px; }
+.chips button {
+  flex: 1; height: 38px; border-radius: 12px;
+  background: var(--panel); color: var(--dim);
+  font-size: 13px; font-weight: 600;
+}
+.chips button.on { background: var(--accent); color: #1a1206; }
+
+/* ---------------- 플레이어: 음원 바 ---------------- */
+.musicbar { background: var(--panel); border-radius: 12px; padding: 10px 12px; margin-top: 10px; }
+.mrow { display: flex; align-items: center; gap: 10px; }
+.mname { flex: 1; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mrow.tiny { font-size: 11px; color: var(--dim); margin-top: 6px; justify-content: space-between; }
+.mprog { height: 4px; background: var(--line); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.mprog i { display: block; height: 100%; width: 0; background: var(--lat); }
+.linkbtn { font-size: 12px; color: var(--accent); font-weight: 600; padding: 4px; }
+
+/* ---------------- 플레이어: 재생 컨트롤 ---------------- */
+.transport {
+  display: flex; align-items: center; justify-content: center; gap: 18px;
+  padding-top: 14px;
+}
+.tbtn {
+  width: 64px; height: 64px; border-radius: 22px;
+  background: var(--panel);
+  font-size: 22px;
+  display: grid; place-items: center;
+}
+.tbtn:active { background: var(--panel2); }
+.tbtn.play {
+  width: 88px; height: 88px; border-radius: 30px;
+  background: var(--accent); color: #1a1206;
+  font-size: 34px;
+}
+.tbtn.play.on { background: var(--txt); }
+.tbtn.has-music { color: var(--lat); }
+
+/* ---------------- 기록 ---------------- */
+.statcards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0 22px; }
+.statcard { background: var(--panel); border-radius: 14px; padding: 12px 10px; text-align: center; }
+.statcard b { display: block; font-size: 20px; font-weight: 700; }
+.statcard span { font-size: 11px; color: var(--dim); }
+
+.seg { display: flex; gap: 6px; background: var(--panel); border-radius: 10px; padding: 3px; }
+.seg.wrap { flex-wrap: wrap; }
+.seg button {
+  padding: 8px 14px; border-radius: 8px;
+  font-size: 13px; font-weight: 600; color: var(--dim);
+  flex: 1; white-space: nowrap;
+}
+.seg button.on { background: var(--panel2); color: var(--txt); }
+
+.chart { display: flex; align-items: flex-end; gap: 4px; height: 132px; padding: 6px 0; }
+.chart .cbar { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; gap: 4px; }
+.chart .cbar i { display: block; background: var(--line); border-radius: 3px; min-height: 3px; }
+.chart .cbar.has i { background: var(--accent); }
+.chart .cbar.today i { background: var(--std); }
+.chart .cbar span { font-size: 9px; color: var(--dim); text-align: center; }
+
+.bars { display: flex; flex-direction: column; gap: 8px; }
+.brow { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.brow .bname { width: 84px; flex: 0 0 auto; color: var(--dim); }
+.brow .bfill { flex: 1; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.brow .bfill i { display: block; height: 100%; border-radius: 4px; }
+.brow .bval { width: 62px; text-align: right; font-size: 12px; color: var(--dim); }
+
+.goalrow { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 12px; padding: 12px 14px; }
+.goalrow input { width: 72px; background: var(--panel2); border: none; border-radius: 8px; padding: 10px; text-align: center; font-size: 17px; font-weight: 700; }
+.goalrow input:focus { outline: 2px solid var(--accent); }
+
+.rowbtns { display: flex; gap: 8px; margin-top: 14px; }
+.ghost {
+  flex: 1; padding: 13px 10px; border-radius: 12px;
+  background: var(--panel); color: var(--txt);
+  font-size: 14px; font-weight: 600;
+}
+.ghost:active { background: var(--panel2); }
+.ghost.danger { color: var(--danger); }
+
+.bigbtn {
+  width: 100%; padding: 16px; border-radius: 14px;
+  background: var(--accent); color: #1a1206;
+  font-size: 16px; font-weight: 700;
+}
+.bigbtn:disabled { background: var(--panel); color: var(--dim); }
+
+/* ---------------- 시트 ---------------- */
+.backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6);
+  z-index: 40; backdrop-filter: blur(2px);
+}
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  z-index: 41;
+  background: var(--bg);
+  border-radius: 20px 20px 0 0;
+  max-height: 88vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 -8px 40px rgba(0,0,0,.6);
+  animation: rise .22s ease-out;
+}
+@keyframes rise { from { transform: translateY(24px); opacity: 0; } }
+.sheethead {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px var(--pad) 10px;
+  border-bottom: 1px solid var(--line);
+}
+.sheethead h2 { flex: 1; margin: 0; font-size: 17px; }
+.sheetbody {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px var(--pad) calc(var(--safe-b) + 28px);
+}
+
+.field { margin-bottom: 24px; }
+.field > label { display: block; font-size: 12px; color: var(--dim); font-weight: 600; margin-bottom: 8px; letter-spacing: .03em; }
+.field input[type=text] { width: 100%; background: var(--panel); border: none; border-radius: 12px; padding: 14px; font-size: 15px; }
+.field input[type=text]:focus { outline: 2px solid var(--accent); }
+.hint { font-size: 12px; color: var(--dim); line-height: 1.6; margin: 8px 0 0; }
+.hint b { color: var(--txt); }
+
+.radios { display: flex; flex-direction: column; gap: 6px; }
+.radios button {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 14px; border-radius: 12px;
+  background: var(--panel); text-align: left; font-size: 15px;
+}
+.radios button.on { background: var(--panel2); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.radios button .rname { flex: 1; }
+.radios button .rmeta { font-size: 11px; color: var(--dim); }
+.radios button .rdel { color: var(--danger); font-size: 12px; padding: 4px 6px; }
+
+.vol { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.vol span { width: 40px; font-size: 13px; color: var(--dim); }
+.vol input { flex: 1; -webkit-appearance: none; appearance: none; height: 30px; background: none; }
+.vol input::-webkit-slider-runnable-track { height: 6px; background: var(--line); border-radius: 3px; }
+.vol input::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--txt); margin-top: -9px;
+}
+.vol input::-moz-range-track { height: 6px; background: var(--line); border-radius: 3px; }
+.vol input::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: var(--txt); border: none; }
+
+.switch {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 0; cursor: pointer;
+}
+.switch input { position: absolute; opacity: 0; pointer-events: none; }
+.switch > span {
+  width: 50px; height: 30px; border-radius: 15px;
+  background: var(--line); position: relative; flex: 0 0 auto;
+  transition: background .18s;
+}
+.switch > span::after {
+  content: ""; position: absolute; top: 3px; left: 3px;
+  width: 24px; height: 24px; border-radius: 50%; background: #fff;
+  transition: transform .18s;
+}
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(20px); }
+.switch em { font-style: normal; font-size: 15px; display: flex; flex-direction: column; gap: 2px; }
+.switch em small { font-size: 11px; color: var(--dim); }
+
+/* ---------------- 음원 정렬 ---------------- */
+.tracklist { display: flex; flex-direction: column; gap: 6px; }
+.tracklist button {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 14px; border-radius: 12px; background: var(--panel); text-align: left;
+}
+.tracklist .tkname { flex: 1; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tracklist .tkmeta { font-size: 11px; color: var(--dim); }
+.tracklist .tkdel { color: var(--danger); font-size: 12px; padding: 4px 6px; }
+
+.tapbtn {
+  width: 100%; height: 120px; border-radius: 18px;
+  background: var(--panel2); margin-top: 12px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+}
+.tapbtn:active { background: var(--accent); color: #1a1206; }
+.tapbtn b { font-size: 40px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tapbtn span { font-size: 12px; color: var(--dim); }
+.tapbtn:active span { color: #1a1206; }
+
+.alignresult {
+  margin-top: 12px; padding: 12px 14px; border-radius: 12px;
+  background: var(--panel); font-size: 13px; color: var(--dim); line-height: 1.6;
+}
+.alignresult b { color: var(--txt); font-size: 15px; }
+.alignresult.good { box-shadow: inset 0 0 0 1.5px rgba(122,162,255,.5); }
+
+.tunerow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.tunerow > span { width: 66px; font-size: 12px; color: var(--dim); flex: 0 0 auto; }
+.tunerow > b { flex: 1; text-align: center; font-size: 14px; font-variant-numeric: tabular-nums; }
+.tunerow .ghost { flex: 0 0 auto; padding: 10px 12px; font-size: 13px; }
+
+/* ---------------- 녹음 ---------------- */
+.recstage { text-align: center; }
+.recprog { font-size: 12px; color: var(--dim); margin-bottom: 6px; }
+.recword { font-size: 54px; font-weight: 800; margin-bottom: 18px; letter-spacing: -.02em; }
+.recbtn {
+  width: 100%; height: 84px; border-radius: 20px;
+  background: var(--panel2); font-size: 16px; font-weight: 700;
+}
+.recbtn.rec { background: var(--danger); color: #fff; }
+
+/* ---------------- 토스트 ---------------- */
+.toast {
+  position: fixed; left: 50%; bottom: calc(var(--safe-b) + 90px);
+  transform: translateX(-50%);
+  background: var(--panel2); color: var(--txt);
+  padding: 12px 18px; border-radius: 999px;
+  font-size: 13px; font-weight: 600;
+  z-index: 60; max-width: 90vw; text-align: center;
+  box-shadow: 0 6px 24px rgba(0,0,0,.5);
+  animation: rise .18s ease-out;
+}
+
+@media (max-width: 340px) {
+  .beat { width: 36px; height: 36px; }
+  .tbtn.play { width: 76px; height: 76px; }
+  #bpm-input { font-size: 38px; }
+}

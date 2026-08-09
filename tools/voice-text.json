@@ -1,0 +1,44 @@
+{
+  "packs": [
+    {
+      "id": "ko-heami",
+      "voice": "Microsoft Heami Desktop",
+      "rate": 6,
+      "text": {
+        "1": "원",
+        "2": "투",
+        "3": "쓰리",
+        "4": "포",
+        "5": "파이브",
+        "6": "식스",
+        "7": "세븐",
+        "8": "에잇",
+        "cha": "차",
+        "a": "아",
+        "and": "앤",
+        "slow": "슬로우",
+        "quick": "퀵"
+      }
+    },
+    {
+      "id": "en-zira",
+      "voice": "Microsoft Zira Desktop",
+      "rate": 6,
+      "text": {
+        "1": "one",
+        "2": "two",
+        "3": "three",
+        "4": "four",
+        "5": "five",
+        "6": "six",
+        "7": "seven",
+        "8": "eight",
+        "cha": "cha",
+        "a": "uh",
+        "and": "and",
+        "slow": "slow",
+        "quick": "quick"
+      }
+    }
+  ]
+}

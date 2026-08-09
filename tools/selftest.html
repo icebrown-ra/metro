@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>자가진단</title>
+<style>
+  body { background:#0b0d12; color:#e9edf5; font:14px/1.6 ui-monospace, Menlo, Consolas, monospace; padding:20px; }
+  .ok { color:#7ddc8e; } .bad { color:#ff6b6b; }
+  h1 { font-size:18px; } pre { white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<h1>댄스스포츠 메트로놈 — 자가진단</h1>
+<pre id="out">실행 중…</pre>
+
+<script src="../js/dances.js"></script>
+<script src="../js/voices.js"></script>
+<script src="../js/stats.js"></script>
+<script src="../js/audio.js"></script>
+<script src="../js/music.js"></script>
+<script>
+(function () {
+  var lines = [], pass = 0, fail = 0;
+
+  function ok(cond, label, detail) {
+    if (cond) { pass++; lines.push('PASS  ' + label); }
+    else { fail++; lines.push('FAIL  ' + label + (detail ? '   -> ' + detail : '')); }
+  }
+  function near(a, b, eps) { return Math.abs(a - b) < (eps || 1e-9); }
+
+  var D = DSM.Dances;
+
+  /* ---- 1. 종목 데이터 ---- */
+  ok(D.list.length === 10, '종목 10개', D.list.length);
+  ok(D.list.filter(function (d) { return d.style === 'standard'; }).length === 5, '스탠다드 5종목');
+  ok(D.list.filter(function (d) { return d.style === 'latin'; }).length === 5, '라틴 5종목');
+
+  var EXPECT = {
+    waltz: [3, 29, 87], tango: [4, 32, 128], vwaltz: [3, 59, 177],
+    foxtrot: [4, 29, 116], quickstep: [4, 51, 204],
+    samba: [2, 51, 102], chacha: [4, 31, 124], rumba: [4, 26, 104],
+    paso: [2, 61, 122], jive: [4, 43, 172]
+  };
+  Object.keys(EXPECT).forEach(function (id) {
+    var d = D.get(id), e = EXPECT[id];
+    ok(!!d, '종목 존재: ' + id);
+    if (!d) return;
+    ok(d.beatsPerBar === e[0], id + ' 박자 ' + e[0], d.beatsPerBar);
+    ok(d.mpm.def === e[1], id + ' 기본 MPM ' + e[1], d.mpm.def);
+    ok(d.bpm.def === e[2], id + ' 기본 BPM ' + e[2], d.bpm.def);
+    ok(d.bpm.def === d.mpm.def * d.beatsPerBar, id + ' BPM = MPM x 박자수');
+  });
+
+  /* ---- 2. 패턴 길이 / 음절 키 ---- */
+  var SYL = DSM.Voices.SYLLABLES;
+  D.list.forEach(function (d) {
+    ok(d.click.length === d.slotsPerBar, d.id + ' 클릭 패턴 길이 = ' + d.slotsPerBar, d.click.length);
+    ok(D.simpleClick(d).length === d.slotsPerBar, d.id + ' 심플 패턴 길이');
+    d.voiceStyles.forEach(function (v) {
+      ok(v.seq.length === d.slotsPerBar, d.id + '/' + v.id + ' 음성 시퀀스 길이', v.seq.length);
+      var badKey = null;
+      v.seq.forEach(function (k) { if (k && SYL.indexOf(k) < 0) badKey = k; });
+      ok(badKey === null, d.id + '/' + v.id + ' 음절 키가 모두 실재', badKey);
+    });
+    d.click.forEach(function (c) {
+      ok(c === '' || 'AMws'.indexOf(c) >= 0, d.id + ' 클릭 음색 키 유효: "' + c + '"');
+    });
+  });
+
+  /* ---- 3. 예비박: 반드시 마디 경계에 맞아야 한다 ---- */
+  ['8', '4', 'bars2', 'off'].forEach(function (mode) {
+    D.list.forEach(function (d) {
+      var n = D.resolveCountIn(d, mode);
+      ok(n % d.beatsPerBar === 0, d.id + ' 예비박(' + mode + ')이 마디 배수', n);
+      ok(n <= 8, d.id + ' 예비박(' + mode + ') <= 8 (음절 1~8 로 셀 수 있어야)', n);
+    });
+  });
+  ok(D.resolveCountIn(D.get('waltz'), '8') === 6, '왈츠 8박 요청 -> 6박(2마디)로 보정', D.resolveCountIn(D.get('waltz'), '8'));
+  ok(D.resolveCountIn(D.get('vwaltz'), '8') === 6, '비엔나왈츠 8박 요청 -> 6박');
+  ok(D.resolveCountIn(D.get('tango'), '8') === 8, '탱고 8박 = 2마디');
+  ok(D.resolveCountIn(D.get('samba'), '8') === 8, '삼바 8박 = 4마디');
+  ok(D.resolveCountIn(D.get('waltz'), '4') === 3, '왈츠 4박 요청 -> 3박(1마디)');
+  ok(D.resolveCountIn(D.get('tango'), 'off') === 0, '예비박 끄기');
+
+  /* ---- 4. 타이밍 산술 ---- */
+  var tango = D.get('tango');
+  ok(near(D.tickSeconds(tango, 120), 0.5), '탱고 120BPM 한 박 = 0.5초', D.tickSeconds(tango, 120));
+  ok(near(D.barSeconds(tango, 120), 2.0), '탱고 120BPM 한 마디 = 2.0초');
+  ok(near(D.barSeconds(tango, 120) * 8, 16.0), '8마디 프레이즈 = 16.0초');
+
+  var qs = D.get('quickstep');
+  ok(near(60 / D.barSeconds(qs, qs.bpm.def), 51), '퀵스텝 204BPM 60초 = 51마디', 60 / D.barSeconds(qs, qs.bpm.def));
+
+  /* 분할박은 박의 3/4 지점에 와야 한다 (정중앙 아님) */
+  var jive = D.get('jive');
+  ok(jive.tpb === 4 && jive.click[11] === 's', '자이브 3박 뒤 a 가 16분 3번째 칸(3/4 지점)');
+  ok(jive.click[15] === 's', '자이브 4박 뒤 a');
+  var samba = D.get('samba');
+  ok(samba.tpb === 4 && samba.click[3] === 's' && samba.click[7] === 's', '삼바 a 가 각 박의 3/4 지점');
+  ok(near(D.tickSeconds(samba, 102) * 3, 60 / 102 * 0.75), '삼바 a 위치 = 박의 3/4');
+
+  /* ---- 5. 스케줄러 위치 진행 (실제 코드 경로) ---- */
+  var pl = DSM.Audio.plan(tango, 120, { countInMode: '8' }, 20);
+  var ci = pl.filter(function (e) { return e.phase === 'countin'; });
+  ok(ci.length === 8, '탱고 예비박 이벤트 8개', ci.length);
+  var firstMain = null;
+  for (var i = 0; i < pl.length; i++) { if (pl[i].phase === 'main') { firstMain = pl[i]; break; } }
+  ok(firstMain && near(firstMain.t, 4.0), '예비 8박(4.0초) 뒤 본박 시작', firstMain && firstMain.t);
+  ok(firstMain && firstMain.slot === 0 && firstMain.bar === 0, '본박 첫 이벤트가 1마디 1박');
+
+  var bar8 = null;
+  for (var j = 0; j < pl.length; j++) {
+    if (pl[j].phase === 'main' && pl[j].bar === 8 && pl[j].slot === 0) { bar8 = pl[j]; break; }
+  }
+  ok(bar8 && near(bar8.t - firstMain.t, 16.0), '본박 시작부터 8마디까지 정확히 16.0초', bar8 && (bar8.t - firstMain.t));
+
+  /* 왈츠: 6박 예비 뒤 본박이 마디 1박에서 시작 (8박이면 어긋난다) */
+  var wz = D.get('waltz');
+  var pw = DSM.Audio.plan(wz, 90, { countInMode: '8' }, 12);
+  var wci = pw.filter(function (e) { return e.phase === 'countin'; });
+  ok(wci.length === 6, '왈츠 예비박 6개', wci.length);
+  var wMain = null;
+  for (var k = 0; k < pw.length; k++) { if (pw[k].phase === 'main') { wMain = pw[k]; break; } }
+  ok(wMain && wMain.slot === 0, '왈츠 본박이 1박에서 시작');
+  ok(wMain && near(wMain.t, 6 * (60 / 90)), '왈츠 예비 6박 = 4.0초', wMain && wMain.t);
+
+  /* 자이브: 16분 격자에서도 마디가 4박마다 넘어가야 한다 */
+  var pj = DSM.Audio.plan(jive, 172, { countInMode: 'off' }, 10);
+  var jBar1 = null;
+  for (var m = 0; m < pj.length; m++) { if (pj[m].bar === 1 && pj[m].slot === 0) { jBar1 = pj[m]; break; } }
+  ok(jBar1 && near(jBar1.t, 60 / 172 * 4), '자이브 2마디 시작 = 4박 뒤', jBar1 && jBar1.t);
+
+  /* 8마디 프레이즈 반복 */
+  var phraseHeads = pl.filter(function (e) { return e.phase === 'main' && e.slot === 0 && e.bar % 8 === 0; });
+  ok(phraseHeads.length >= 1, '프레이즈 머리 이벤트 존재');
+
+  /* ---- 6. 기록 유틸 ---- */
+  ok(DSM.Stats.fmt(45) === '45초', 'fmt 45초', DSM.Stats.fmt(45));
+  ok(DSM.Stats.fmt(600) === '10분', 'fmt 10분', DSM.Stats.fmt(600));
+  ok(DSM.Stats.fmt(3600) === '1시간', 'fmt 1시간', DSM.Stats.fmt(3600));
+  ok(DSM.Stats.fmt(4500) === '1시간 15분', 'fmt 1시간 15분', DSM.Stats.fmt(4500));
+  ok(/^\d{4}-\d{2}-\d{2}$/.test(DSM.Stats.dayKey()), 'dayKey 형식', DSM.Stats.dayKey());
+
+  /* ---- 7. 음성 팩 ---- */
+  ok(SYL.length === 13, '음절 키 13개', SYL.length);
+  ['1', '2', '3', '4', '5', '6', '7', '8', 'cha', 'a', 'and', 'slow', 'quick'].forEach(function (k) {
+    ok(SYL.indexOf(k) >= 0, '음절 키 포함: ' + k);
+  });
+  ok(DSM.Voices.getBuffer('1') === null, '로드 전 getBuffer 는 null 반환(스케줄러가 안전하게 건너뜀)');
+
+  /* ---- 결과 ---- */
+  var head = (fail === 0 ? 'ALL PASS' : 'FAILURES') + '  pass=' + pass + '  fail=' + fail;
+  document.getElementById('out').textContent = head + '\n\n' +
+    lines.filter(function (l) { return l.indexOf('FAIL') === 0; }).join('\n') +
+    (fail ? '\n\n' : '') + '(통과 ' + pass + '건 생략)';
+  document.title = head;
+})();
+</script>
+</body>
+</html>
