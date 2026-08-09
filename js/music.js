@@ -28,17 +28,81 @@ DSM.Music = (function () {
     });
   }
 
+  /* ---------------- 정렬 기억 ----------------
+   *
+   * 곡 파일 자체는 폰에만 두지만, 곡 이름별 정렬값(템포·다운비트)은 가볍게
+   * 기억해 둔다. 같은 곡을 다시 열거나 다른 기기에서 열었을 때 탭을 다시
+   * 하지 않아도 되게 하려는 것. 계정 동기화가 켜져 있으면 이 값이 오간다. */
+  var MEM_KEY = 'dsm.alignMemory';
+
+  function memory() {
+    try { return JSON.parse(localStorage.getItem(MEM_KEY)) || {}; }
+    catch (e) { return {}; }
+  }
+
+  function saveMemory(m) {
+    try { localStorage.setItem(MEM_KEY, JSON.stringify(m)); } catch (e) { }
+  }
+
+  function nameKey(name) {
+    return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function remember(name, align, startBar, danceId) {
+    if (!align) return;
+    var m = memory();
+    m[nameKey(name)] = {
+      name: name, bpm: align.bpm, offset: align.offset,
+      startBar: startBar || 0, danceId: danceId || null, at: Date.now()
+    };
+    saveMemory(m);
+  }
+
+  function recall(name) {
+    return memory()[nameKey(name)] || null;
+  }
+
+  function listMemory() {
+    var m = memory();
+    return Object.keys(m).map(function (k) {
+      var e = m[k];
+      return {
+        id: k, name: e.name, danceId: e.danceId,
+        bpm: e.bpm, offset: e.offset, startBar: e.startBar
+      };
+    });
+  }
+
+  function mergeMemory(rows) {
+    var m = memory(), changed = false;
+    (rows || []).forEach(function (r) {
+      var k = nameKey(r.name || r.id);
+      if (!m[k]) {
+        m[k] = {
+          name: r.name, bpm: r.bpm, offset: r.offset_sec,
+          startBar: r.start_bar || 0, danceId: r.dance_id || null, at: 0
+        };
+        changed = true;
+      }
+    });
+    if (changed) saveMemory(m);
+    return changed;
+  }
+
   function loadFile(file) {
     return readFile(file).then(function (data) {
       return DSM.Voices.decode(data.slice(0)).then(function (buffer) {
+        var name = file.name.replace(/\.[^.]+$/, '');
+        var known = recall(name);
         current = {
           id: 'trk-' + Date.now(),
-          name: file.name.replace(/\.[^.]+$/, ''),
-          danceId: null,
+          name: name,
+          danceId: known ? known.danceId : null,
           buffer: buffer,
           data: data,
-          align: null,
-          startBar: 0
+          align: known ? { bpm: known.bpm, offset: known.offset } : null,
+          startBar: known ? (known.startBar || 0) : 0,
+          recalled: !!known
         };
         taps = [];
         return current;
@@ -206,6 +270,10 @@ DSM.Music = (function () {
     listSaved: listSaved,
     open: open,
     remove: remove,
-    fmtTime: fmtTime
+    fmtTime: fmtTime,
+    remember: remember,
+    recall: recall,
+    listMemory: listMemory,
+    mergeMemory: mergeMemory
   };
 })();

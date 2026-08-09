@@ -265,6 +265,10 @@ DSM.Audio = (function () {
       return;
     }
 
+    // 앱이 백그라운드면 requestAnimationFrame 이 멈춰 큐가 계속 쌓인다.
+    // 소리는 계속 나야 하므로 스케줄은 두고, 화면용 큐만 잘라낸다.
+    if (visualQ.length > 240) visualQ.splice(0, visualQ.length - 120);
+
     visualQ.push({
       t: time, phase: 'main',
       slot: ev.slot,

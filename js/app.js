@@ -63,7 +63,7 @@ DSM.App = (function () {
   }
 
   function showView(id) {
-    ['view-home', 'view-player', 'view-stats'].forEach(function (v) {
+    ['view-home', 'view-stats'].forEach(function (v) {
       $(v).classList.toggle('is-active', v === id);
     });
     window.scrollTo(0, 0);
@@ -107,39 +107,59 @@ DSM.App = (function () {
 
   /* ---------------- 홈 ---------------- */
 
+  var tileEls = {};    // danceId -> 버튼
+
   function renderHome() {
-    ['standard', 'latin'].forEach(function (style) {
-      var wrap = $('grid-' + style);
-      wrap.innerHTML = '';
-      DSM.Dances.list.filter(function (d) { return d.style === style; }).forEach(function (d) {
-        var b = document.createElement('button');
-        b.className = 'tile ' + (style === 'standard' ? 'std' : 'lat');
-        var saved = S.bpmByDance[d.id];
-        var shown = saved || d.bpm.def;
-        var pct = Math.round(shown / d.bpm.def * 100);
-        b.innerHTML = '<span class="tname">' + d.ko + '</span>' +
-          '<span class="tmeta"><b>' + shown + '</b> BPM · ' + d.beatsPerBar + '/4' +
-          (pct !== 100 ? ' · ' + pct + '%' : '') + '</span>';
-        b.addEventListener('click', function () { openDance(d.id); });
-        wrap.appendChild(b);
-      });
+    var wrap = $('dancegrid');
+    wrap.innerHTML = '';
+    tileEls = {};
+    DSM.Dances.list.forEach(function (d) {
+      var b = document.createElement('button');
+      b.className = 'tile ' + (d.style === 'standard' ? 'std' : 'lat');
+      b.dataset.id = d.id;
+      b.innerHTML = '<i class="pulse"></i>' +
+        '<span class="tname">' + (d.short || d.ko) + '</span>' +
+        '<span class="tmeta"></span>';
+      b.addEventListener('click', function () { tapDance(d.id); });
+      wrap.appendChild(b);
+      tileEls[d.id] = b;
+      paintTile(d);
     });
     renderToday();
     $('silent-note').hidden = !isIOS;
   }
 
+  function paintTile(d) {
+    var b = tileEls[d.id];
+    if (!b) return;
+    var shown = S.bpmByDance[d.id] || d.bpm.def;
+    var pct = Math.round(shown / d.bpm.def * 100);
+    b.querySelector('.tmeta').innerHTML =
+      '<b>' + shown + '</b> BPM · ' + d.beatsPerBar + '/4' + (pct !== 100 ? ' · ' + pct + '%' : '');
+    b.classList.toggle('on', !!cur && cur.id === d.id);
+  }
+
+  function paintAllTiles() { DSM.Dances.list.forEach(paintTile); }
+
   function renderToday() {
     var t = DSM.Stats.today();
-    var g = DSM.Stats.goal();
-    $('today-val').textContent = DSM.Stats.fmt(t);
-    $('today-fill').style.width = Math.min(100, t / g * 100) + '%';
     var st = DSM.Stats.streak();
-    $('today-sub').textContent = '목표 ' + Math.round(g / 60) + '분' + (st > 1 ? ' · ' + st + '일 연속' : '');
+    $('today-val').textContent = DSM.Stats.fmt(t);
+    $('today-sub').textContent = st > 1 ? '오늘 · ' + st + '일 연속' : '오늘';
+  }
+
+  /* 종목 버튼: 누르면 바로 시작. 재생 중인 종목을 다시 누르면 일시정지/재개. */
+  function tapDance(id) {
+    var s = DSM.Audio.status();
+    if (cur && cur.id === id && (s === 'playing' || s === 'countin')) { playPause(); return; }
+    if (cur && cur.id === id && s === 'paused') { playPause(); return; }
+    selectDance(id);
+    playPause();
   }
 
   /* ---------------- 플레이어 ---------------- */
 
-  function openDance(id) {
+  function selectDance(id) {
     var d = DSM.Dances.get(id);
     if (!d) return;
     if (cur && cur.id !== id && DSM.Audio.hasMusic()) {
@@ -149,27 +169,21 @@ DSM.App = (function () {
       $('btn-music').classList.remove('has-music');
     }
     DSM.Audio.stop();
+    DSM.Stats.closeChunk();
     cur = d;
     S.lastDance = id;
     bpm = S.bpmByDance[id] || d.bpm.def;
     save();
-    renderPlayer();
-    showView('view-player');
+    $('dock').hidden = false;
+    renderDock();
+    paintAllTiles();
     // 종목별 딥링크 — 자주 하는 종목만 따로 홈 화면에 추가해 둘 수 있다
     try { history.replaceState(null, '', '#' + id); } catch (e) { /* file:// 등 */ }
   }
 
-  function goHome() {
-    stopAll();
-    renderHome();
-    showView('view-home');
-    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { }
-  }
-
-  function renderPlayer() {
+  function renderDock() {
     var d = cur;
-    $('p-name').textContent = d.ko;
-    $('p-meta').textContent = d.beatsPerBar + '/4 · 공식 ' + d.mpm.min + '–' + d.mpm.max + ' MPM';
+    $('dock-name').textContent = d.ko;
 
     // 비트 도트: 박은 큰 원, 클릭이 있는 분할박은 작은 점
     var wrap = $('beats');
@@ -206,8 +220,7 @@ DSM.App = (function () {
     setBpm(bpm);
     paintTempo();          // 음원이 붙어 있으면 setBpm 이 일찍 빠져나오므로 여기서 한 번 더
     paintTransport();
-    $('bar-num').textContent = '준비';
-    $('phrase-wrap').hidden = true;
+    $('bar-num').textContent = '';
   }
 
   function setBpm(v) {
@@ -218,6 +231,7 @@ DSM.App = (function () {
     save();
     DSM.Audio.setBpm(v);
     paintTempo();
+    paintTile(cur);
   }
 
   function paintTempo() {
@@ -252,20 +266,27 @@ DSM.App = (function () {
     beatEls.forEach(function (el) { if (el) el.classList.remove('on'); });
   }
 
+  function showCountIn(on, n) {
+    $('beats').hidden = on;
+    $('countin-num').hidden = !on;
+    if (on) $('countin-num').textContent = n;
+  }
+
   function onTick(ev) {
     if (ev.phase === 'stopped') {
       clearBeats();
-      $('countin').hidden = true;
-      $('bar-num').textContent = '준비';
-      $('phrase-wrap').hidden = true;
+      showCountIn(false);
+      $('bar-num').textContent = '';
       return;
     }
+
     if (ev.phase === 'countin') {
-      $('countin').hidden = false;
-      $('countin-num').textContent = ev.remaining;
+      showCountIn(true, ev.remaining);
+      $('bar-num').textContent = '예비박';
       return;
     }
-    $('countin').hidden = true;
+
+    showCountIn(false);
 
     // 소리 없는 슬롯에서는 직전 점등을 그대로 둔다 (깜빡임 방지)
     if (beatEls[ev.slot]) {
@@ -273,10 +294,18 @@ DSM.App = (function () {
       beatEls[ev.slot].classList.add('on');
     }
     if (ev.slot === 0) {
-      $('bar-num').textContent = (ev.bar + 1) + '마디';
-      $('phrase-wrap').hidden = false;
-      $('phrase-num').textContent = ev.phrase + 1;
+      $('bar-num').textContent = (ev.bar + 1) + '마디 · ' + (ev.phrase + 1) + '/8';
+      pulseTile();
     }
+  }
+
+  /* 마디 첫 박마다 종목 버튼이 한 번 번쩍이게 — 화면을 안 봐도 눈에 들어온다 */
+  function pulseTile() {
+    if (!cur) return;
+    var el = tileEls[cur.id];
+    if (!el) return;
+    el.classList.add('beat');
+    setTimeout(function () { el.classList.remove('beat'); }, 60);
   }
 
   /* ---------------- 재생 컨트롤 ---------------- */
@@ -313,10 +342,12 @@ DSM.App = (function () {
   function stopAll() {
     DSM.Audio.stop();
     flushStats();
+    DSM.Stats.closeChunk();
     releaseWake();
     paintTransport();
     stopTimers();
     renderToday();
+    syncSoon();
   }
 
   /* ---------------- 화면 꺼짐 방지 ---------------- */
@@ -375,6 +406,7 @@ DSM.App = (function () {
   }
 
   function openSettings() {
+    paintAccount();
     renderVoiceList();
     renderCountStyle();
     renderCountInSeg();
@@ -421,7 +453,7 @@ DSM.App = (function () {
       S.countStyle[cur.id] = id; save();
       renderCountStyle();
       DSM.Audio.setOptions(audioOpts());
-      renderPlayer();
+      renderDock();
     });
   }
 
@@ -550,7 +582,10 @@ DSM.App = (function () {
     DSM.Audio.setStartBar(startBar, cur.beatsPerBar);
     DSM.Audio.setMusicLoop(S.musicLoop);
     bpm = Math.round(align.bpm);
+    // 곡 이름으로 정렬값을 기억해 둔다 — 다른 기기에서 같은 곡을 열면 그대로 쓴다
+    DSM.Music.remember(t.name, align, startBar, t.danceId);
     DSM.Music.save().then(renderTrackList);
+    syncSoon();
     $('musicbar').hidden = false;
     $('m-name').textContent = t.name;
     $('btn-music').classList.add('has-music');
@@ -587,6 +622,7 @@ DSM.App = (function () {
 
   function openRecord() {
     recIndex = 0;
+    $('rec-stage').hidden = true;      // 녹음은 눌러서 여는 선택지로 둔다
     paintRecord();
     openSheet($('sheet-record'));
   }
@@ -639,6 +675,71 @@ DSM.App = (function () {
     recorder = null;
     $('rec-btn').classList.remove('rec');
     $('rec-btn').textContent = '누르고 말하기';
+  }
+
+  /* ---------------- 계정 동기화 ---------------- */
+
+  function syncAvailable() { return !!(DSM.Sync && DSM.Sync.configured()); }
+
+  function paintAccount() {
+    var field = $('account-field');
+    if (!syncAvailable()) { field.hidden = true; return; }
+    field.hidden = false;
+
+    var u = DSM.Sync.currentUser();
+    $('acct-signed-out').hidden = !!u;
+    $('acct-signed-in').hidden = !u;
+    if (u) $('acct-who').textContent = u.email || '로그인됨';
+
+    var last = DSM.Sync.lastSync();
+    if (!u) return;
+    $('acct-status').textContent = last
+      ? '마지막 동기화 ' + last.toLocaleString('ko-KR')
+      : '아직 동기화 전';
+  }
+
+  function setupSync() {
+    if (!syncAvailable()) return;
+
+    DSM.Sync.setHooks({
+      getSettings: function () {
+        return { settings: S, goalSeconds: DSM.Stats.goal() };
+      },
+      applySettings: function (data, goalSeconds) {
+        if (data && typeof data === 'object') {
+          Object.keys(data).forEach(function (k) {
+            if (k === 'vol' && data.vol) {
+              S.vol.click = data.vol.click; S.vol.voice = data.vol.voice; S.vol.music = data.vol.music;
+            } else if (S.hasOwnProperty(k)) S[k] = data[k];
+          });
+          save();
+          DSM.Audio.setVolume('click', S.vol.click);
+          DSM.Audio.setVolume('voice', S.vol.voice);
+          DSM.Audio.setVolume('music', S.vol.music);
+          DSM.Voices.select(S.voicePack).catch(function () { });
+        }
+        if (goalSeconds > 0) DSM.Stats.setGoal(goalSeconds);
+      },
+      getTracks: function () { return Promise.resolve(DSM.Music.listMemory()); },
+      applyTracks: function (rows) { DSM.Music.mergeMemory(rows); }
+    });
+
+    DSM.Sync.onChange(function (state, msg) {
+      var el = $('acct-status');
+      if (state === 'syncing') el.textContent = '동기화 중…';
+      else if (state === 'error') el.textContent = '동기화 실패: ' + msg;
+      else { paintAccount(); renderToday(); }
+      if (state === 'signed-in' || state === 'signed-out') paintAccount();
+    });
+
+    DSM.Sync.init().then(function () { paintAccount(); renderToday(); });
+  }
+
+  /* 연습이 끝났을 때만 올린다 — 재생 중에 네트워크를 건드리지 않는다 */
+  function syncSoon() {
+    if (!syncAvailable() || !DSM.Sync.currentUser()) return;
+    clearTimeout(syncSoon._t);
+    syncSoon._t = setTimeout(function () { DSM.Sync.sync(); }, 1500);
   }
 
   /* ---------------- 기록 화면 ---------------- */
@@ -701,11 +802,11 @@ DSM.App = (function () {
     // 홈
     $('go-stats').addEventListener('click', function () { renderStats(); showView('view-stats'); });
     $('today-card').addEventListener('click', function () { renderStats(); showView('view-stats'); });
-    $('stats-back').addEventListener('click', function () { renderHome(); showView('view-home'); });
-
-    // 플레이어
-    $('go-home').addEventListener('click', goHome);
-    $('go-settings').addEventListener('click', openSettings);
+    $('stats-back').addEventListener('click', function () { renderToday(); showView('view-home'); });
+    $('go-settings').addEventListener('click', function () {
+      if (!cur) selectDance(S.lastDance || DSM.Dances.list[0].id);
+      openSettings();
+    });
     $('btn-play').addEventListener('click', playPause);
     $('btn-stop').addEventListener('click', stopAll);
     $('btn-music').addEventListener('click', openMusic);
@@ -738,7 +839,7 @@ DSM.App = (function () {
     });
     $('opt-simple').addEventListener('change', function () {
       S.simple = this.checked; save();
-      if (cur) { DSM.Audio.setOptions(audioOpts()); renderPlayer(); }
+      if (cur) { DSM.Audio.setOptions(audioOpts()); renderDock(); }
     });
     $('opt-phrase').addEventListener('change', function () {
       S.phraseAccent = this.checked; save();
@@ -763,7 +864,36 @@ DSM.App = (function () {
     });
     $('voice-record').addEventListener('click', openRecord);
 
+    // 계정
+    $('acct-send').addEventListener('click', function () {
+      var email = ($('acct-email').value || '').trim();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('이메일 주소를 확인해주세요'); return; }
+      $('acct-status').textContent = '보내는 중…';
+      DSM.Sync.signIn(email).then(function () {
+        $('acct-status').textContent = email + ' 로 로그인 링크를 보냈습니다. 메일함을 확인하세요 (스팸함도 확인).';
+      }).catch(function (e) {
+        $('acct-status').textContent = '보내지 못했습니다: ' + (e.message || e);
+      });
+    });
+    $('acct-signout').addEventListener('click', function () {
+      DSM.Sync.signOut().then(function () {
+        paintAccount();
+        toast('로그아웃했습니다. 기록은 이 폰에 그대로 남아 있습니다');
+      });
+    });
+    $('acct-sync').addEventListener('click', function () {
+      DSM.Stats.closeChunk();
+      DSM.Sync.sync().then(function (okr) {
+        if (okr) { toast('동기화 완료'); renderToday(); renderStats(); }
+      });
+    });
+
     // 녹음
+    $('rec-open').addEventListener('click', function () {
+      $('rec-stage').hidden = false;
+      this.disabled = true;
+      this.textContent = '아래에서 음절을 하나씩 녹음하세요';
+    });
     $('rec-btn').addEventListener('pointerdown', function (e) { e.preventDefault(); startRec(); });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
       $('rec-btn').addEventListener(ev, stopRec);
@@ -922,10 +1052,10 @@ DSM.App = (function () {
 
     // 백그라운드 처리
     document.addEventListener('visibilitychange', function () {
-      if (document.hidden) { flushStats(); }
+      if (document.hidden) { flushStats(); DSM.Stats.closeChunk(); syncSoon(); }
       else if (DSM.Audio.status() === 'playing' || DSM.Audio.status() === 'countin') { acquireWake(); }
     });
-    window.addEventListener('pagehide', flushStats);
+    window.addEventListener('pagehide', function () { flushStats(); DSM.Stats.closeChunk(); });
   }
 
   function init() {
@@ -944,11 +1074,16 @@ DSM.App = (function () {
       return DSM.Voices.select(S.voicePack);
     }).catch(function () { });
 
+    setupSync();
+
     renderHome();
     showView('view-home');
 
+    // 딥링크(#rumba)가 있으면 그 종목을, 없으면 마지막에 쓰던 종목을 미리 골라 둔다.
+    // 고르기만 하고 재생하지는 않는다 — 앱을 열자마자 소리가 나면 곤란하다.
     var want = (location.hash || '').replace('#', '');
-    if (want && DSM.Dances.get(want)) openDance(want);
+    var pick = (want && DSM.Dances.get(want)) ? want : S.lastDance;
+    if (pick && DSM.Dances.get(pick)) selectDance(pick);
 
     if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
       navigator.serviceWorker.register('sw.js').catch(function () { });
@@ -957,5 +1092,5 @@ DSM.App = (function () {
 
   document.addEventListener('DOMContentLoaded', init);
 
-  return { open: openDance };
+  return { open: selectDance };
 })();

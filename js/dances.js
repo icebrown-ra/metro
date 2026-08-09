@@ -26,7 +26,7 @@ DSM.Dances = (function () {
   var LIST = [
     /* ---------------- 스탠다드 ---------------- */
     {
-      id: 'waltz', ko: '왈츠', en: 'Waltz', style: 'standard',
+      id: 'waltz', ko: '왈츠', short: '왈츠', en: 'Waltz', style: 'standard',
       beatsPerBar: 3, tpb: 1,
       mpm: { min: 28, max: 30, def: 29 },
       click: ['A', 'w', 'w'],
@@ -35,7 +35,7 @@ DSM.Dances = (function () {
       ]
     },
     {
-      id: 'tango', ko: '탱고', en: 'Tango', style: 'standard',
+      id: 'tango', ko: '탱고', short: '탱고', en: 'Tango', style: 'standard',
       beatsPerBar: 4, tpb: 1,
       mpm: { min: 31, max: 33, def: 32 },
       click: ['A', 'w', 'M', 'w'],
@@ -45,7 +45,7 @@ DSM.Dances = (function () {
       ]
     },
     {
-      id: 'vwaltz', ko: '비엔나 왈츠', en: 'Viennese Waltz', style: 'standard',
+      id: 'vwaltz', ko: '비엔나 왈츠', short: '비엔나', en: 'Viennese Waltz', style: 'standard',
       beatsPerBar: 3, tpb: 1,
       mpm: { min: 58, max: 60, def: 59 },
       click: ['A', 'w', 'w'],
@@ -54,7 +54,7 @@ DSM.Dances = (function () {
       ]
     },
     {
-      id: 'foxtrot', ko: '슬로우 폭스트롯', en: 'Slow Foxtrot', style: 'standard',
+      id: 'foxtrot', ko: '슬로우 폭스트롯', short: '폭스트롯', en: 'Slow Foxtrot', style: 'standard',
       beatsPerBar: 4, tpb: 1,
       mpm: { min: 28, max: 30, def: 29 },
       click: ['A', 'w', 'M', 'w'],
@@ -65,7 +65,7 @@ DSM.Dances = (function () {
       ]
     },
     {
-      id: 'quickstep', ko: '퀵스텝', en: 'Quickstep', style: 'standard',
+      id: 'quickstep', ko: '퀵스텝', short: '퀵스텝', en: 'Quickstep', style: 'standard',
       beatsPerBar: 4, tpb: 1,
       mpm: { min: 50, max: 52, def: 51 },
       click: ['A', 'w', 'M', 'w'],
@@ -77,7 +77,7 @@ DSM.Dances = (function () {
 
     /* ---------------- 라틴 ---------------- */
     {
-      id: 'samba', ko: '삼바', en: 'Samba', style: 'latin',
+      id: 'samba', ko: '삼바', short: '삼바', en: 'Samba', style: 'latin',
       beatsPerBar: 2, tpb: 4,
       mpm: { min: 50, max: 52, def: 51 },
       /* '아'는 박의 3/4 지점 (3:1 분할) — 정중앙이 아니다 */
@@ -87,7 +87,7 @@ DSM.Dances = (function () {
       ]
     },
     {
-      id: 'chacha', ko: '차차차', en: 'Cha Cha Cha', style: 'latin',
+      id: 'chacha', ko: '차차차', short: '차차차', en: 'Cha Cha Cha', style: 'latin',
       beatsPerBar: 4, tpb: 2,
       mpm: { min: 30, max: 32, def: 31 },
       click: ['A', '', 'w', '', 'M', '', 'w', 's'],
@@ -98,7 +98,7 @@ DSM.Dances = (function () {
       ]
     },
     {
-      id: 'rumba', ko: '룸바', en: 'Rumba', style: 'latin',
+      id: 'rumba', ko: '룸바', short: '룸바', en: 'Rumba', style: 'latin',
       beatsPerBar: 4, tpb: 1,
       /* 스텝이 2박에서 시작하므로 2박을 보조 강박으로 */
       mpm: { min: 25, max: 27, def: 26 },
@@ -108,7 +108,7 @@ DSM.Dances = (function () {
       ]
     },
     {
-      id: 'paso', ko: '파소도블레', en: 'Paso Doble', style: 'latin',
+      id: 'paso', ko: '파소도블레', short: '파소', en: 'Paso Doble', style: 'latin',
       beatsPerBar: 2, tpb: 1,
       mpm: { min: 60, max: 62, def: 61 },
       click: ['A', 'w'],
@@ -117,7 +117,7 @@ DSM.Dances = (function () {
       ]
     },
     {
-      id: 'jive', ko: '자이브', en: 'Jive', style: 'latin',
+      id: 'jive', ko: '자이브', short: '자이브', en: 'Jive', style: 'latin',
       beatsPerBar: 4, tpb: 4,
       mpm: { min: 42, max: 44, def: 43 },
       /* 샤세 3a4 — '아'는 3박·4박의 3/4 지점 */

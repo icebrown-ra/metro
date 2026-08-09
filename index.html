@@ -16,65 +16,33 @@
 </head>
 <body>
 
-<!-- ============================ 홈 ============================ -->
+<!-- ============================ 홈 = 종목 + 컨트롤 ============================ -->
 <main id="view-home" class="view is-active">
-  <header class="topbar">
-    <h1 class="brand">댄스스포츠<br><b>메트로놈</b></h1>
+  <header class="homebar">
+    <button class="todaymini" id="today-card">
+      <b id="today-val">0분</b><span id="today-sub">오늘</span>
+    </button>
+    <span class="spacer"></span>
     <button class="pillbtn" id="go-stats">기록</button>
+    <button class="iconbtn sm" id="go-settings" aria-label="설정">⚙</button>
   </header>
 
-  <button class="today" id="today-card">
-    <div class="today-main">
-      <span class="today-label">오늘 연습</span>
-      <span class="today-val" id="today-val">0분</span>
-    </div>
-    <div class="today-side">
-      <div class="bar"><i id="today-fill"></i></div>
-      <span class="today-sub" id="today-sub"></span>
-    </div>
-  </button>
-
-  <section class="group">
-    <h2>스탠다드</h2>
-    <div class="grid" id="grid-standard"></div>
-  </section>
-
-  <section class="group">
-    <h2>라틴</h2>
-    <div class="grid" id="grid-latin"></div>
-  </section>
+  <div class="dancegrid" id="dancegrid"></div>
 
   <p class="note" id="silent-note" hidden>
-    <b>소리가 안 나면</b> 아이폰 무음 모드를 해제하세요. 웹앱은 무음 스위치의 영향을 받습니다.
+    <b>소리가 안 나면</b> 아이폰 무음 모드를 해제하세요.
   </p>
-  <p class="note tiny">공식 템포는 WDSF/WDC 경기 규정 기준입니다.</p>
-</main>
 
-<!-- ============================ 플레이어 ============================ -->
-<main id="view-player" class="view">
-  <header class="topbar">
-    <button class="iconbtn" id="go-home" aria-label="뒤로">‹</button>
-    <div class="ptitle">
-      <span id="p-name">—</span>
-      <small id="p-meta"></small>
+  <!-- 선택한 종목의 컨트롤. 종목을 고르기 전에는 숨어 있다. -->
+  <div class="dock" id="dock" hidden>
+    <div class="dockhead">
+      <span class="dockname" id="dock-name">—</span>
+      <span class="dockbeats" id="beats"></span>
+      <span class="dockcount" id="countin-num" hidden>8</span>
+      <span class="dockbar" id="bar-num"></span>
     </div>
-    <button class="iconbtn" id="go-settings" aria-label="설정">⚙</button>
-  </header>
 
-  <div class="stage">
-    <div class="countin" id="countin" hidden>
-      <b id="countin-num">8</b>
-      <span>예비박</span>
-    </div>
-    <div class="beats" id="beats"></div>
-    <div class="barinfo">
-      <span id="bar-num">준비</span>
-      <span class="dot-sep" id="phrase-wrap" hidden>프레이즈 <b id="phrase-num">1</b>/8</span>
-    </div>
-  </div>
-
-  <div class="tempo">
-    <div class="bpm-row">
+    <div class="docktempo">
       <button class="stepbtn" id="bpm-minus" aria-label="느리게">−</button>
       <div class="bpm-box">
         <div class="bpm-main">
@@ -92,25 +60,25 @@
     </div>
 
     <div class="chips" id="pct-chips"></div>
-  </div>
 
-  <div class="musicbar" id="musicbar" hidden>
-    <div class="mrow">
-      <span class="mname" id="m-name">—</span>
-      <button class="linkbtn" id="m-edit">정렬</button>
-      <button class="linkbtn" id="m-detach">해제</button>
+    <div class="musicbar" id="musicbar" hidden>
+      <div class="mrow">
+        <span class="mname" id="m-name">—</span>
+        <button class="linkbtn" id="m-edit">정렬</button>
+        <button class="linkbtn" id="m-detach">해제</button>
+      </div>
+      <div class="mprog"><i id="m-fill"></i></div>
+      <div class="mrow tiny">
+        <span id="m-time">0:00</span>
+        <span id="m-info"></span>
+      </div>
     </div>
-    <div class="mprog"><i id="m-fill"></i></div>
-    <div class="mrow tiny">
-      <span id="m-time">0:00</span>
-      <span id="m-info"></span>
-    </div>
-  </div>
 
-  <div class="transport">
-    <button class="tbtn" id="btn-stop" aria-label="정지">■</button>
-    <button class="tbtn play" id="btn-play" aria-label="시작">▶</button>
-    <button class="tbtn" id="btn-music" aria-label="음원 얹기">♪</button>
+    <div class="transport">
+      <button class="tbtn" id="btn-stop" aria-label="정지">■</button>
+      <button class="tbtn play" id="btn-play" aria-label="시작">▶</button>
+      <button class="tbtn" id="btn-music" aria-label="음원 얹기">♪</button>
+    </div>
   </div>
 </main>
 
@@ -167,14 +135,37 @@
   </div>
   <div class="sheetbody">
 
+    <div class="field" id="account-field" hidden>
+      <label>계정</label>
+      <div id="acct-signed-out">
+        <input type="email" id="acct-email" placeholder="이메일 주소" inputmode="email" autocomplete="email">
+        <div class="rowbtns">
+          <button class="ghost" id="acct-send">로그인 링크 받기</button>
+        </div>
+        <p class="hint">비밀번호가 없습니다. 이메일로 받은 링크를 누르면 바로 로그인됩니다.<br>
+          로그인하면 <b>연습 기록·설정·음원 정렬</b>이 계정에 저장돼 다른 기기에서도 이어집니다.
+          음원 파일과 녹음한 목소리는 이 폰에만 남습니다.</p>
+      </div>
+      <div id="acct-signed-in" hidden>
+        <div class="acctrow">
+          <span class="acctwho" id="acct-who"></span>
+          <button class="linkbtn" id="acct-signout">로그아웃</button>
+        </div>
+        <div class="rowbtns">
+          <button class="ghost" id="acct-sync">지금 동기화</button>
+        </div>
+      </div>
+      <p class="hint" id="acct-status"></p>
+    </div>
+
     <div class="field">
       <label>목소리</label>
       <div class="radios" id="voice-list"></div>
       <div class="rowbtns">
         <button class="ghost" id="voice-preview">미리듣기</button>
-        <button class="ghost" id="voice-record">내 목소리 녹음</button>
       </div>
       <p class="hint" id="voice-hint"></p>
+      <button class="linkbtn subtle" id="voice-record">다른 목소리로 바꾸기 →</button>
     </div>
 
     <div class="field">
@@ -294,16 +285,18 @@
 <!-- ============================ 녹음 시트 ============================ -->
 <section class="sheet" id="sheet-record" hidden>
   <div class="sheethead">
-    <h2>내 목소리 녹음</h2>
+    <h2>다른 목소리로 바꾸기</h2>
     <button class="iconbtn" data-close aria-label="닫기">✕</button>
   </div>
   <div class="sheetbody">
-    <p class="hint">화면의 음절을 하나씩 발음하면 됩니다. 버튼을 <b>누르고 있는 동안</b> 녹음되고, 떼면 앞뒤 무음이 자동으로 잘립니다.</p>
+    <p class="hint">기본 목소리로도 충분하다면 여기는 안 보셔도 됩니다.
+      음절 13개를 파일로 넣거나 직접 녹음하면 그 목소리로 바뀝니다.
+      일부만 바꿔도 되고, 없는 음절은 기본 목소리로 채워집니다.</p>
     <div class="field">
       <label>팩 이름</label>
       <input type="text" id="pack-name" value="내 목소리" maxlength="20">
     </div>
-    <div class="recstage">
+    <div class="recstage" id="rec-stage" hidden>
       <div class="recprog" id="rec-prog"></div>
       <div class="recword" id="rec-word">원</div>
       <button class="recbtn" id="rec-btn">누르고 말하기</button>
@@ -315,10 +308,15 @@
       <p class="hint" id="rec-status"></p>
     </div>
     <div class="field">
-      <label>또는 파일로 넣기</label>
+      <label>파일로 넣기</label>
       <button class="ghost" id="import-voice">음성 파일 고르기</button>
       <input type="file" id="import-voice-file" accept="audio/*" multiple hidden>
-      <p class="hint">파일 이름을 음절 키와 같게 하세요 — <b>1.wav, 2.wav … cha.wav, a.wav, and.wav, slow.wav, quick.wav</b>. 일부만 넣어도 되고, 없는 음절은 기본 목소리로 채워집니다.</p>
+      <p class="hint">파일 이름을 음절 키와 같게 하세요 — <b>1.wav, 2.wav … cha.wav, a.wav, and.wav, slow.wav, quick.wav</b></p>
+    </div>
+    <div class="field">
+      <label>직접 녹음</label>
+      <button class="ghost" id="rec-open">녹음 시작하기</button>
+      <p class="hint">음절이 하나씩 뜹니다. 버튼을 <b>누르고 있는 동안</b> 녹음되고, 떼면 앞뒤 무음이 자동으로 잘립니다. 13개에 2분쯤 걸립니다.</p>
     </div>
     <div class="rowbtns">
       <button class="bigbtn" id="rec-done">완료</button>
@@ -333,6 +331,8 @@
 <script src="js/stats.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/music.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/sync.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

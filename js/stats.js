@@ -31,6 +31,118 @@ DSM.Stats = (function () {
     return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
   }
 
+  /* ---------------- 동기화용 연습 조각 ----------------
+   *
+   * 계정 동기화를 켰을 때 올릴 단위. 조각마다 이 기기에서 만든 고유 id 가 있어서
+   * 같은 조각을 여러 번 올려도 서버에서 한 행으로 합쳐진다(중복 합산 없음).
+   * 열려 있는 조각은 연습이 이어지는 동안 계속 커지고, 종목이나 날짜가 바뀌거나
+   * 정지하면 닫힌다. */
+  var CHUNK_KEY = 'dsm.chunks';
+  var chunks = null;
+
+  function loadChunks() {
+    if (chunks) return chunks;
+    try { chunks = JSON.parse(localStorage.getItem(CHUNK_KEY)) || []; }
+    catch (e) { chunks = []; }
+    return chunks;
+  }
+
+  function saveChunks() {
+    try { localStorage.setItem(CHUNK_KEY, JSON.stringify(chunks)); } catch (e) { }
+  }
+
+  function newId() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    // 구형 브라우저 대비 — 형식만 맞으면 된다
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : ((r & 0x3) | 0x8)).toString(16);
+    });
+  }
+
+  function bumpChunk(danceId, seconds) {
+    loadChunks();
+    var k = dayKey();
+    var open = null;
+    for (var i = 0; i < chunks.length; i++) if (chunks[i].open) open = chunks[i];
+    if (open && (open.day !== k || open.dance_id !== (danceId || null))) {
+      open.open = false;
+      open = null;
+    }
+    if (!open) {
+      open = { id: newId(), day: k, dance_id: danceId || null, seconds: 0, open: true };
+      chunks.push(open);
+    }
+    open.seconds += seconds;
+    // 오래된 조각이 무한정 쌓이지 않게 (동기화를 안 켠 사용자)
+    if (chunks.length > 400) chunks = chunks.slice(-200);
+    saveChunks();
+  }
+
+  function closeChunk() {
+    loadChunks();
+    var changed = false;
+    chunks.forEach(function (c) { if (c.open) { c.open = false; changed = true; } });
+    if (changed) saveChunks();
+  }
+
+  function pendingChunks() {
+    return loadChunks().map(function (c) {
+      return { id: c.id, day: c.day, dance_id: c.dance_id, seconds: Math.round(c.seconds) };
+    }).filter(function (c) { return c.seconds > 0; });
+  }
+
+  /* 서버가 받아간 조각은 지운다. 아직 열려 있는 조각은 계속 커지므로 남긴다. */
+  function markChunksSynced(ids) {
+    loadChunks();
+    var set = {};
+    ids.forEach(function (i) { set[i] = true; });
+    chunks = chunks.filter(function (c) { return c.open || !set[c.id]; });
+    saveChunks();
+  }
+
+  /* 로그인 전부터 이 폰에 쌓여 있던 기록을 조각으로 바꿔 한 번만 올린다.
+   * id 를 기억해 두므로 재시도해도 중복되지 않는다. */
+  var BACKFILL_KEY = 'dsm.backfillIds';
+
+  function backfillChunks() {
+    load();
+    var map;
+    try { map = JSON.parse(localStorage.getItem(BACKFILL_KEY)) || {}; }
+    catch (e) { map = {}; }
+
+    var rows = [];
+    Object.keys(data).forEach(function (day) {
+      var e = data[day];
+      var byDance = e.d || {};
+      var named = 0;
+      Object.keys(byDance).forEach(function (id) {
+        named += byDance[id];
+        rows.push(mk(day, id, byDance[id]));
+      });
+      var rest = Math.round(e.t - named);
+      if (rest > 0) rows.push(mk(day, null, rest));   // 종목 정보 없이 쌓인 시간
+    });
+
+    function mk(day, danceId, seconds) {
+      var key = day + '|' + (danceId || '');
+      if (!map[key]) map[key] = newId();
+      return { id: map[key], day: day, dance_id: danceId, seconds: Math.round(seconds) };
+    }
+
+    try { localStorage.setItem(BACKFILL_KEY, JSON.stringify(map)); } catch (e2) { }
+    return rows.filter(function (r) { return r.seconds > 0; });
+  }
+
+  /* 서버 합계로 화면용 기록을 맞춘다 (올릴 것을 먼저 올린 뒤에 호출) */
+  function replaceTotals(rows) {
+    load();
+    rows.forEach(function (r) {
+      data[r.day] = { t: r.total_seconds, d: r.by_dance || {} };
+    });
+    save();
+  }
+
   function add(danceId, seconds) {
     if (!(seconds > 0)) return;
     load();
@@ -39,6 +151,7 @@ DSM.Stats = (function () {
     data[k].t += seconds;
     if (danceId) data[k].d[danceId] = (data[k].d[danceId] || 0) + seconds;
     save();
+    bumpChunk(danceId, seconds);
   }
 
   function today() {
@@ -152,6 +265,11 @@ DSM.Stats = (function () {
 
   return {
     add: add,
+    closeChunk: closeChunk,
+    pendingChunks: pendingChunks,
+    markChunksSynced: markChunksSynced,
+    backfillChunks: backfillChunks,
+    replaceTotals: replaceTotals,
     today: today,
     recent: recent,
     totalsByDance: totalsByDance,
