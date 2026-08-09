@@ -17,6 +17,7 @@ param(
     [int]$TimeoutSec = 120,
     [int]$Port = 0,
     [string]$WindowSize = "390,844",   # iPhone 정도 — 레이아웃 검사가 실기기와 어긋나지 않게
+    [string]$UserAgent = "",
     [switch]$KeepOpen
 )
 
@@ -38,7 +39,8 @@ if ($Port -eq 0) { $Port = Get-Random -Minimum 9300 -Maximum 9899 }
 $profileDir = Join-Path $env:TEMP ("cdp-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
 
 $chrome = Find-Chrome
-$args = @(
+# $args 는 PowerShell 예약 변수라 쓰면 안 된다
+$chromeArgs = @(
     '--headless=new', '--disable-gpu', '--no-sandbox',
     '--autoplay-policy=no-user-gesture-required',
     '--allow-file-access-from-files',
@@ -47,10 +49,10 @@ $args = @(
     '--force-device-scale-factor=1',      # 없으면 윈도우 배율 때문에 뷰포트가 어긋난다
     "--remote-debugging-port=$Port",
     "--user-data-dir=$profileDir",
-    '--no-first-run', '--no-default-browser-check',
-    $Url
+    '--no-first-run', '--no-default-browser-check'
 )
-$proc = Start-Process -FilePath $chrome -ArgumentList $args -PassThru -WindowStyle Hidden
+$chromeArgs += $Url
+$proc = Start-Process -FilePath $chrome -ArgumentList $chromeArgs -PassThru -WindowStyle Hidden
 
 $ws = $null
 try {
@@ -112,6 +114,26 @@ try {
             throw ("page exception: " + $msg)
         }
         return $r.result.result.value
+    }
+
+    # UA 는 명령줄로 넘기면 공백·괄호 때문에 크롬이 못 뜬다. CDP 로 덮어쓴다.
+    if ($UserAgent) {
+        try { Send-Cdp 'Emulation.setUserAgentOverride' @{ userAgent = $UserAgent } | Out-Null } catch { }
+        try { Send-Cdp 'Page.reload' @{ ignoreCache = $true } | Out-Null } catch { }
+        Start-Sleep -Milliseconds 800
+    }
+
+    # Chrome 창에는 최소 너비가 있어서 --window-size 만으로는 좁은 폰 화면을 못 만든다.
+    # 실제 기기 크기로 검사하려면 뷰포트를 직접 덮어써야 한다.
+    if ($WindowSize -match '^\s*(\d+)\s*,\s*(\d+)\s*$') {
+        try {
+            Send-Cdp 'Emulation.setDeviceMetricsOverride' @{
+                width             = [int]$Matches[1]
+                height            = [int]$Matches[2]
+                deviceScaleFactor = 1
+                mobile            = $true
+            } | Out-Null
+        } catch { }
     }
 
     if ($WaitFor) {

@@ -310,7 +310,10 @@
           isIOS ? 'iOS는 웹 진동 미지원 — 화면 표시로 대체했습니다' : (navigator.vibrate ? '지원' : '미지원'));
       if (isIOS) add('info', '무음 모드', '무음이면 소리가 나지 않습니다. 측면 스위치나 제어센터에서 해제하세요.');
       add(standalone ? 'ok' : 'info', standalone ? '홈 화면 앱으로 실행 중' : '브라우저로 실행 중',
-          standalone ? '' : 'Safari 공유 → 홈 화면에 추가 하면 전체화면 앱이 됩니다');
+          standalone ? ''
+            : (isIOS ? 'Safari 공유 → 홈 화면에 추가 하면 전체화면 앱이 됩니다'
+                     : '브라우저 메뉴(⋮) → 앱 설치 / 홈 화면에 추가'));
+      add('info', '브라우저', navigator.userAgent);
 
       if ('serviceWorker' in navigator && location.protocol === 'https:') {
         return navigator.serviceWorker.getRegistrations().then(function (rs) {
