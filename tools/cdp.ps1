@@ -16,6 +16,7 @@ param(
     [string]$WaitFor = "",
     [int]$TimeoutSec = 120,
     [int]$Port = 0,
+    [string]$WindowSize = "390,844",   # iPhone 정도 — 레이아웃 검사가 실기기와 어긋나지 않게
     [switch]$KeepOpen
 )
 
@@ -42,6 +43,7 @@ $args = @(
     '--autoplay-policy=no-user-gesture-required',
     '--allow-file-access-from-files',
     '--mute-audio',
+    "--window-size=$WindowSize",
     "--remote-debugging-port=$Port",
     "--user-data-dir=$profileDir",
     '--no-first-run', '--no-default-browser-check',

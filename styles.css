@@ -19,6 +19,11 @@
 
 * { box-sizing: border-box; }
 
+/* [hidden] 은 브라우저 기본 스타일이라, 클래스에 display 를 지정하면 그쪽이 이긴다.
+   .sheet 와 .dock 에 display:flex 를 준 탓에 숨겨야 할 시트가 화면에 남아
+   아래 버튼들의 탭을 가로막고 있었다. 전역으로 못 박아 둔다. */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;

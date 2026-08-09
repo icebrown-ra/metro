@@ -862,7 +862,9 @@ DSM.App = (function () {
       });
       if (!i) toast('이 카운트 방식에는 음성이 없습니다');
     });
-    $('voice-record').addEventListener('click', openRecord);
+    /* 목소리 교체는 평소에 필요 없어서 설정 화면에서 뺐다.
+       바꾸고 싶을 때는 주소 끝에 #voice 를 붙여 열면 된다. */
+    if (location.hash === '#voice') setTimeout(openRecord, 300);
 
     // 계정
     $('acct-send').addEventListener('click', function () {
