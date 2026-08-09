@@ -98,6 +98,25 @@ button { cursor: pointer; border: none; background: none; }
   font-weight: 600;
 }
 
+/* ---------------- 인앱 브라우저 경고 ---------------- */
+.inapp {
+  flex: 0 0 auto;
+  background: #3a2418;
+  border: 1px solid #6b4423;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.inapp b { font-size: 14px; color: var(--accent); }
+.inapp span { font-size: 12px; color: var(--dim); line-height: 1.5; }
+.inapp small { font-size: 11px; color: var(--dim); line-height: 1.5; }
+.inapp button {
+  background: var(--accent); color: #1a1206;
+  border-radius: 10px; padding: 11px; font-size: 14px; font-weight: 700;
+  margin-top: 2px;
+}
+
 /* ---------------- 홈 상단바 ---------------- */
 .homebar { display: flex; align-items: center; gap: 8px; min-height: 44px; flex: 0 0 auto; }
 .todaymini {

@@ -18,6 +18,13 @@
 
 <!-- ============================ 홈 = 종목 + 컨트롤 ============================ -->
 <main id="view-home" class="view is-active">
+  <div class="inapp" id="inapp-warn" hidden>
+    <b>카카오톡 등 앱 안의 브라우저로 열렸습니다.</b>
+    <span>여기서는 소리·화면이 제대로 동작하지 않고 홈 화면에 추가할 수도 없습니다.</span>
+    <button id="inapp-open">브라우저에서 열기</button>
+    <small id="inapp-hint"></small>
+  </div>
+
   <header class="homebar">
     <button class="todaymini" id="today-card">
       <b id="today-val">0분</b><span id="today-sub">오늘</span>
@@ -207,6 +214,12 @@
       </label>
     </div>
 
+    <div class="field">
+      <p class="hint">버전 <b id="app-version">—</b>
+        · 화면이 이상하거나 옛날 그대로면
+        <button class="linkbtn" id="force-refresh">새로 받기</button></p>
+    </div>
+
   </div>
 </section>
 
@@ -327,6 +340,7 @@
 
 <div class="toast" id="toast" hidden></div>
 
+<script src="js/version.js"></script>
 <script src="js/dances.js"></script>
 <script src="js/voices.js"></script>
 <script src="js/stats.js"></script>

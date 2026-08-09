@@ -406,6 +406,7 @@ DSM.App = (function () {
   }
 
   function openSettings() {
+    $('app-version').textContent = DSM.VERSION || '?';
     paintAccount();
     renderVoiceList();
     renderCountStyle();
@@ -853,6 +854,10 @@ DSM.App = (function () {
       if (!S.wakeOn) releaseWake();
       else if (DSM.Audio.status() === 'playing') acquireWake();
     });
+    $('force-refresh').addEventListener('click', function () {
+      toast('새로 받는 중…');
+      hardReset();
+    });
     $('voice-preview').addEventListener('click', function () {
       if (!cur) { DSM.Audio.previewVoice('1'); return; }
       var seq = DSM.Dances.voiceStyle(cur, S.countStyle[cur.id]).seq;
@@ -1084,7 +1089,78 @@ DSM.App = (function () {
     window.addEventListener('pagehide', function () { flushStats(); DSM.Stats.closeChunk(); });
   }
 
+  /* ---------------- 인앱 브라우저 ----------------
+   *
+   * 링크를 카톡으로 주고받는 게 보통이라, 앱 안의 브라우저로 열리는 일이 잦다.
+   * 그 WebView 들은 구형이라 화면이 깨지거나 소리가 안 나고, 홈 화면 추가도 안 된다.
+   * 그대로 두면 "앱이 고장났다"로 보이므로 감지해서 안내한다. */
+  function inAppBrowser() {
+    var ua = navigator.userAgent || '';
+    if (/KAKAOTALK/i.test(ua)) return 'kakao';
+    if (/Instagram/i.test(ua)) return 'instagram';
+    if (/FBAN|FBAV/i.test(ua)) return 'facebook';
+    if (/NAVER\(inapp|DaumApps/i.test(ua)) return 'naver';
+    if (/Line\//i.test(ua)) return 'line';
+    return null;
+  }
+
+  function setupInApp() {
+    var kind = inAppBrowser();
+    if (!kind) return;
+    var el = $('inapp-warn');
+    el.hidden = false;
+
+    var isAndroid = /Android/i.test(navigator.userAgent);
+    var url = location.href;
+
+    if (isAndroid) {
+      $('inapp-hint').textContent = '눌러도 안 열리면 오른쪽 위 ⋮ 메뉴에서 "다른 브라우저로 열기"를 고르세요.';
+      $('inapp-open').addEventListener('click', function () {
+        if (kind === 'kakao') {
+          location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url);
+          return;
+        }
+        // 크롬으로 넘기는 안드로이드 표준 방식
+        var noScheme = url.replace(/^https?:\/\//, '');
+        location.href = 'intent://' + noScheme + '#Intent;scheme=https;package=com.android.chrome;end';
+      });
+    } else {
+      // iOS 는 외부 브라우저를 강제로 열 수 없다 — 방법만 알려준다
+      $('inapp-open').textContent = '주소 복사하기';
+      $('inapp-hint').textContent = '복사한 뒤 Safari 를 열어 붙여넣으세요. (또는 오른쪽 아래 ⋯ → Safari로 열기)';
+      $('inapp-open').addEventListener('click', function () {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(function () { toast('주소를 복사했습니다'); },
+            function () { toast('복사에 실패했습니다'); });
+        } else {
+          toast(url);
+        }
+      });
+    }
+  }
+
+  /* 주소 뒤에 ?fresh 를 붙이면 캐시와 서비스워커를 지우고 새로 받는다.
+   * 예전 버전에 갇힌 기기를 되살리는 탈출구. (한 기기가 실제로 그렇게 갇혔다) */
+  function hardReset() {
+    var jobs = [];
+    if (window.caches && caches.keys) {
+      jobs.push(caches.keys().then(function (ks) {
+        return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+      }).catch(function () { }));
+    }
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+        return Promise.all(rs.map(function (r) { return r.unregister(); }));
+      }).catch(function () { }));
+    }
+    return Promise.all(jobs).then(function () {
+      location.replace(location.pathname + '?r=' + Date.now());
+    });
+  }
+
   function init() {
+    if (location.search.indexOf('fresh') >= 0) { hardReset(); return; }
+
     load();
     bind();
 
@@ -1100,6 +1176,7 @@ DSM.App = (function () {
       return DSM.Voices.select(S.voicePack);
     }).catch(function () { });
 
+    setupInApp();
     setupSync();
 
     renderHome();

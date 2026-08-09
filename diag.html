@@ -41,6 +41,7 @@
 <div class="sub">아이폰은 <b>무음 모드를 해제</b>해야 소리가 납니다. 아무 소리도 안 들리면 그게 원인입니다.</div>
 <p><a href="./">← 앱으로</a></p>
 
+<script src="js/version.js"></script>
 <script src="js/dances.js"></script>
 <script src="js/voices.js"></script>
 <script src="js/stats.js"></script>
@@ -71,7 +72,7 @@
               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   document.getElementById('env').textContent =
-    location.host + ' · ' + (isIOS ? 'iOS' : navigator.platform) +
+    (DSM.VERSION || '?') + ' · ' + location.host + ' · ' + (isIOS ? 'iOS' : navigator.platform) +
     ' · ' + (standalone ? '홈 화면 앱' : '브라우저');
 
   /* ---------- 렌더된 PCM 에서 클릭 시작점 찾기 ---------- */
